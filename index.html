@@ -1,0 +1,1812 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>チップ帳</title>
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F2F7">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="チップ帳">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  /* ===== iOSネイティブ風トークン ===== */
+  :root {
+    --bg: #F2F2F7;            /* systemGroupedBackground */
+    --surface: #FFFFFF;
+    --surface-press: #E5E5EA;
+    --ink: #1C1C1E;
+    --muted: #8E8E93;
+    --line: rgba(60, 60, 67, .16);
+    --tint: #0F7B55;          /* アクセント: 深緑（雀卓の名残） */
+    --tint-soft: rgba(15, 123, 85, .13);
+    --on-tint: #FFFFFF;
+    --pos: #1F8A3D;
+    --neg: #D70015;
+    --ok-bg: #E6F6EC;
+    --warn: #A65B00;
+    --warn-bg: #FFF3E0;
+    --key-bg: #E9E9EE;
+    --key-press: #D6D6DC;
+    --sheet-bg: #F7F7FA;
+    --scrim: rgba(0, 0, 0, .45);
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+    --sheet-shadow: 0 -8px 32px rgba(0, 0, 0, .16);
+    --shimmer: rgba(127, 127, 127, .14);
+    /* グラフ系列色（ライト面で検証済みのカテゴリカルパレット） */
+    --col1: #2a78d6; --col2: #1baf7a; --col3: #eda100; --col4: #008300;
+    --col5: #4a3aa7; --col6: #e34948; --col7: #e87ba4; --col8: #eb6834;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --surface: #1C1C1E;
+      --surface-press: #2C2C2E;
+      --ink: #FFFFFF;
+      --muted: #98989F;
+      --line: rgba(84, 84, 88, .55);
+      --tint: #30D158;
+      --tint-soft: rgba(48, 209, 88, .16);
+      --on-tint: #04250F;
+      --pos: #30D158;
+      --neg: #FF453A;
+      --ok-bg: #0D2C18;
+      --warn: #FFB340;
+      --warn-bg: #33230C;
+      --key-bg: #2C2C2E;
+      --key-press: #3A3A3C;
+      --sheet-bg: #1C1C1E;
+      --scrim: rgba(0, 0, 0, .55);
+      --card-shadow: none;
+      --sheet-shadow: 0 -8px 32px rgba(0, 0, 0, .5);
+      --shimmer: rgba(255, 255, 255, .07);
+      /* ダーク面用に段調整した同じ8色 */
+      --col1: #3987e5; --col2: #199e70; --col3: #c98500; --col4: #008300;
+      --col5: #9085e9; --col6: #e66767; --col7: #d55181; --col8: #d95926;
+    }
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    touch-action: manipulation;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+  }
+  button:focus-visible, input:focus-visible {
+    outline: 2.5px solid var(--tint);
+    outline-offset: 2px;
+  }
+  svg { display: block; flex-shrink: 0; }
+
+  .app {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: calc(18px + env(safe-area-inset-top, 0px)) 16px calc(92px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* ===== ヘッダー ===== */
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 2px 0;
+  }
+  h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    line-height: 1.15;
+  }
+  .sub {
+    margin: 1px 0 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .rate-pill {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    background: var(--tint-soft);
+    color: var(--tint);
+    border-radius: 999px;
+    padding: 8px 15px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: transform .12s ease-out, opacity .12s;
+  }
+  .rate-pill:active { transform: scale(.96); opacity: .75; }
+  .rate-pill strong {
+    font-size: 18px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .view { display: flex; flex-direction: column; gap: 14px; }
+  .view[hidden] { display: none; }
+
+  /* ===== 検算バナー ===== */
+  .banner {
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    color: var(--muted);
+    box-shadow: var(--card-shadow);
+  }
+  .banner strong { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .banner.ok   { background: var(--ok-bg);   color: var(--pos); }
+  .banner.warn { background: var(--warn-bg); color: var(--warn); }
+
+  /* ===== 参加者カード ===== */
+  .players {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .player-card {
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 14px 15px 12px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-height: 88px;
+    box-shadow: var(--card-shadow);
+    transition: transform .12s ease-out, background .12s;
+  }
+  .player-card:active { transform: scale(.97); background: var(--surface-press); }
+  .player-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .player-name .pn {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .p-dot, .lg-dot, .tt-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .player-pts {
+    font-size: 30px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.02em;
+    line-height: 1.2;
+  }
+  .player-pts.pos { color: var(--pos); }
+  .player-pts.neg { color: var(--neg); }
+  .player-pts.zero { color: var(--muted); }
+  .player-hint { font-size: 11px; color: var(--muted); }
+
+  .add-player {
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 13px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--tint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-shadow: var(--card-shadow);
+    transition: transform .12s ease-out, background .12s;
+  }
+  .add-player:active { transform: scale(.98); background: var(--surface-press); }
+
+  /* ===== スケルトン ===== */
+  .skel {
+    position: relative;
+    overflow: hidden;
+    background: var(--key-bg);
+    border-radius: 14px;
+  }
+  .skel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, var(--shimmer), transparent);
+    animation: shimmer 1.3s infinite;
+  }
+  @keyframes shimmer { to { transform: translateX(100%); } }
+  .skel-banner { height: 46px; }
+  .skel-card { height: 88px; }
+
+  /* ===== 履歴 ===== */
+  .history-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 0 2px;
+  }
+  h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    flex: 1;
+  }
+  .head-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--tint);
+    padding: 6px 2px;
+    transition: opacity .12s;
+  }
+  .head-btn:active { opacity: .55; }
+
+  .session-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .day-card {
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 13px 14px 12px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    box-shadow: var(--card-shadow);
+    transition: transform .12s ease-out, background .12s;
+  }
+  .day-card:active { transform: scale(.97); background: var(--surface-press); }
+  .day-date {
+    font-weight: 700;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .day-sub {
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .day-players {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 6px;
+    width: 100%;
+  }
+  .day-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .day-row .day-p {
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .day-row b { font-weight: 600; }
+  .day-row b.pos { color: var(--pos); }
+  .day-row b.neg { color: var(--neg); }
+  .day-warn {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--warn);
+    background: var(--warn-bg);
+    border-radius: 999px;
+    padding: 1px 8px;
+    white-space: nowrap;
+  }
+  .session-live {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--pos);
+    background: var(--ok-bg);
+    border-radius: 999px;
+    padding: 1px 8px;
+    white-space: nowrap;
+  }
+
+  /* ===== 日付詳細 ===== */
+  #sessionDetail {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #sessionDetail[hidden] { display: none; }
+  .back-btn {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--tint);
+    padding: 2px 0;
+    align-self: flex-start;
+    transition: opacity .12s;
+  }
+  .back-btn:active { opacity: .55; }
+
+  .session {
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: var(--card-shadow);
+  }
+  .session-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .session-date {
+    font-weight: 700;
+    font-size: 17px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .session-range {
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    flex: 1;
+  }
+  .session-copy {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tint);
+    padding: 4px 0;
+    transition: opacity .12s;
+  }
+  .session-copy:active { opacity: .55; }
+
+  .session-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 4px 12px;
+  }
+  .session-summary .cap {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    padding: 8px 0 2px;
+  }
+  .sum-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: .5px solid var(--line);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+  }
+  .sum-row:last-child { border-bottom: none; }
+  .sum-row b { font-weight: 700; }
+  .sum-row b.pos { color: var(--pos); }
+  .sum-row b.neg { color: var(--neg); }
+  .sum-row.total { color: var(--muted); font-size: 13px; }
+  .sum-row.total b.ok { color: var(--pos); }
+  .sum-row.total b.bad { color: var(--warn); }
+
+  .history-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .history-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: .5px solid var(--line);
+    font-size: 14px;
+  }
+  .history-list li:last-child { border-bottom: none; padding-bottom: 2px; }
+  .h-time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .h-name { font-weight: 600; flex-shrink: 0; max-width: 26%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .h-calc { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; flex: 1; min-width: 0; }
+  .h-delta { font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .h-delta.pos { color: var(--pos); }
+  .h-delta.neg { color: var(--neg); }
+  .h-del {
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 32px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    transition: background .12s;
+  }
+  .h-del:active { background: var(--surface-press); }
+  .h-del.arm { background: var(--neg); color: #FFF; padding: 0 10px; }
+  .history-empty {
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 28px 8px;
+    background: var(--surface);
+    border-radius: 14px;
+    grid-column: 1 / -1;
+    box-shadow: var(--card-shadow);
+  }
+
+  .reset-row { margin-top: 6px; }
+  .reset-btn {
+    width: 100%;
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--neg);
+    box-shadow: var(--card-shadow);
+    transition: transform .12s ease-out;
+  }
+  .reset-btn:active { transform: scale(.98); }
+  .reset-btn.arm { background: var(--neg); color: #FFF; }
+
+  /* ===== 推移グラフ ===== */
+  .chart-card {
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 15px;
+    box-shadow: var(--card-shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin-bottom: 8px;
+  }
+  .lg-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    padding: 4px 0;
+    transition: opacity .15s;
+  }
+  .lg-chip.off { opacity: .3; }
+  .chart-box { position: relative; }
+  .chart-box svg { touch-action: pan-y; display: block; }
+  .chart-tip {
+    position: absolute;
+    top: 6px;
+    background: var(--sheet-bg);
+    border-radius: 10px;
+    padding: 8px 11px;
+    font-size: 12px;
+    box-shadow: 0 3px 14px rgba(0, 0, 0, .22);
+    pointer-events: none;
+    min-width: 118px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .chart-tip[hidden] { display: none; }
+  .tt-date { font-weight: 700; margin-bottom: 2px; }
+  .tt-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .tt-row b { font-weight: 700; }
+  .tt-l { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+  .chart-hint {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .chart-empty {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 36px 8px;
+  }
+
+  /* カラーピッカー */
+  .color-cap {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-align: center;
+    margin-bottom: -6px;
+  }
+  .color-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 0 4px;
+  }
+  .csw {
+    width: 31px; height: 31px;
+    border-radius: 50%;
+    transition: transform .1s ease-out;
+  }
+  .csw:active { transform: scale(.88); }
+  .csw.active {
+    box-shadow: 0 0 0 2.5px var(--sheet-bg), 0 0 0 5px var(--ink);
+  }
+
+  /* ===== タブバー ===== */
+  .tabbar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    margin: 0 auto;
+    max-width: 520px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-top: .5px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    z-index: 30;
+  }
+  .tabbar button {
+    padding: 9px 0 7px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    transition: color .15s;
+  }
+  .tabbar button.active { color: var(--tint); }
+
+  /* ===== トースト ===== */
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    transform: translate(-50%, 12px);
+    background: color-mix(in srgb, var(--ink) 92%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: var(--bg);
+    padding: 11px 20px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s, transform .2s;
+    z-index: 60;
+    max-width: 88vw;
+    box-shadow: 0 4px 16px rgba(0,0,0,.2);
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ===== シート ===== */
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    background: var(--scrim);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .22s;
+    z-index: 40;
+  }
+  .backdrop.show { opacity: 1; pointer-events: auto; }
+
+  .sheet {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    margin: 0 auto;
+    max-width: 520px;
+    background: var(--sheet-bg);
+    border-radius: 16px 16px 0 0;
+    padding: 16px 18px calc(20px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(105%);
+    transition: transform .28s cubic-bezier(.32,.72,.28,1);
+    z-index: 50;
+    box-shadow: var(--sheet-shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .sheet.show { transform: translateY(0); }
+  .sheet-grip {
+    width: 36px; height: 5px;
+    border-radius: 3px;
+    background: var(--key-press);
+    margin: -4px auto 0;
+  }
+  .sheet-title {
+    font-size: 17px;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: -.01em;
+  }
+  .sheet-title .who { color: var(--tint); }
+
+  /* セグメントコントロール */
+  .seg {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--key-bg);
+    border-radius: 10px;
+    padding: 2.5px;
+  }
+  .seg button {
+    border-radius: 8px;
+    padding: 9px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    transition: background .15s, color .15s, box-shadow .15s;
+  }
+  .seg button.active {
+    background: var(--surface);
+    box-shadow: 0 1px 4px rgba(0,0,0,.14);
+  }
+  #signPos.active { color: var(--pos); }
+  #signNeg.active { color: var(--neg); }
+
+  .preview {
+    text-align: center;
+    font-size: 14px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    min-height: 36px;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 6px;
+  }
+  .preview strong {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.02em;
+  }
+  .preview strong.pos { color: var(--pos); }
+  .preview strong.neg { color: var(--neg); }
+
+  .keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .keypad button {
+    background: var(--surface);
+    border-radius: 11px;
+    padding: 13px 0;
+    font-size: 23px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 52px;
+    box-shadow: var(--card-shadow);
+    transition: background .1s, transform .1s ease-out;
+  }
+  .keypad button:active { background: var(--key-press); transform: scale(.96); }
+  .keypad .fn { font-size: 16px; color: var(--muted); font-weight: 600; }
+
+  .confirm-btn {
+    background: var(--tint);
+    color: var(--on-tint);
+    border-radius: 13px;
+    padding: 15px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    transition: transform .12s ease-out, opacity .12s;
+  }
+  .confirm-btn:active { transform: scale(.98); opacity: .85; }
+  .confirm-btn:disabled { opacity: .35; }
+
+  .sheet-minor {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
+    text-align: center;
+    padding: 8px;
+    border-radius: 10px;
+    transition: background .12s;
+  }
+  .sheet-minor.arm { color: #FFF; background: var(--neg); font-weight: 600; }
+
+  .rate-presets {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .rate-presets button {
+    background: var(--surface);
+    border-radius: 11px;
+    padding: 13px 0;
+    font-size: 17px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    box-shadow: var(--card-shadow);
+    transition: background .12s, transform .1s ease-out;
+  }
+  .rate-presets button:active { transform: scale(.95); }
+  .rate-presets button.active {
+    background: var(--tint);
+    color: var(--on-tint);
+  }
+
+  .text-field {
+    width: 100%;
+    background: var(--surface);
+    border: none;
+    border-radius: 11px;
+    padding: 14px;
+    font: inherit;
+    font-size: 17px;
+    color: var(--ink);
+    box-shadow: var(--card-shadow);
+  }
+  .text-field::placeholder { color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sheet, .backdrop, .toast, .tabbar button,
+    .player-card, .day-card, .rate-pill, .confirm-btn,
+    .keypad button, .rate-presets button, .seg button { transition: none; }
+    .skel::after { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div>
+      <h1>チップ帳</h1>
+      <p class="sub" id="subLabel">麻雀チップ収支</p>
+    </div>
+    <button class="rate-pill" id="rateBtn" aria-label="レートを変更">レート <strong id="rateVal">×1</strong></button>
+  </header>
+
+  <!-- 入力ビュー -->
+  <div class="view" id="viewInput">
+    <div class="banner skel skel-banner" id="banner" aria-live="polite"></div>
+    <div class="players" id="players">
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+    </div>
+    <button class="add-player" id="addPlayerBtn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      参加者を追加
+    </button>
+  </div>
+
+  <!-- 推移ビュー -->
+  <div class="view" id="viewChart" hidden>
+    <div class="history-head">
+      <h2>推移</h2>
+      <button class="head-btn" id="chartRefreshBtn" aria-label="最新の状態に更新">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 4v5h-5"/></svg>
+        更新
+      </button>
+    </div>
+    <div class="chart-card" id="chartCard">
+      <p class="chart-empty">読み込み中…</p>
+    </div>
+  </div>
+
+  <!-- 履歴ビュー -->
+  <div class="view" id="viewHistory" hidden>
+    <div class="history-head">
+      <h2>履歴</h2>
+      <button class="head-btn" id="refreshBtn" aria-label="最新の状態に更新">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 4v5h-5"/></svg>
+        更新
+      </button>
+      <button class="head-btn" id="copyBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6a2.5 2.5 0 0 1 2.5-2.5H16"/></svg>
+        累計をコピー
+      </button>
+    </div>
+    <div class="session-grid" id="sessionsGrid"></div>
+    <div id="sessionDetail" hidden></div>
+    <div class="reset-row">
+      <button class="reset-btn" id="resetBtn">新しいゲームを始める</button>
+    </div>
+  </div>
+</div>
+
+<nav class="tabbar">
+  <button id="tabInput" class="active" data-view="input">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="3.2" y="3.2" width="7.4" height="7.4" rx="2.2"/><rect x="13.4" y="3.2" width="7.4" height="7.4" rx="2.2"/><rect x="3.2" y="13.4" width="7.4" height="7.4" rx="2.2"/><rect x="13.4" y="13.4" width="7.4" height="7.4" rx="2.2"/></svg>
+    入力
+  </button>
+  <button id="tabChart" data-view="chart">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 17l5.5-5.5 4 4L20.5 8"/><path d="M14.5 8h6v6"/></svg>
+    推移
+  </button>
+  <button id="tabHistory" data-view="history">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.8"/><path d="M12 7.5V12l3.2 2"/></svg>
+    履歴
+  </button>
+</nav>
+
+<div class="backdrop" id="backdrop"></div>
+
+<!-- チップ記録シート -->
+<div class="sheet" id="entrySheet" role="dialog" aria-modal="true">
+  <div class="sheet-grip"></div>
+  <div class="sheet-title"><span class="who" id="entryWho"></span> に記録</div>
+  <div class="seg" id="signSeg">
+    <button class="active" id="signPos">＋ 受け取り</button>
+    <button id="signNeg">− 支払い</button>
+  </div>
+  <div class="preview" id="entryPreview"></div>
+  <div class="keypad" id="entryKeypad">
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+    <button data-k="C" class="fn" aria-label="クリア">C</button>
+    <button data-k="0">0</button>
+    <button data-k="B" class="fn" aria-label="1文字消す">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5h9A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-9L3 12l6.5-7z"/><path d="M12.5 9.5l5 5M17.5 9.5l-5 5"/></svg>
+    </button>
+  </div>
+  <button class="confirm-btn" id="entryConfirm">記録する</button>
+  <div class="color-cap">この人のグラフカラー</div>
+  <div class="color-row" id="colorRow"></div>
+  <button class="sheet-minor" id="removePlayer">この参加者を削除</button>
+</div>
+
+<!-- レート変更シート -->
+<div class="sheet" id="rateSheet" role="dialog" aria-modal="true">
+  <div class="sheet-grip"></div>
+  <div class="sheet-title">レートを変更</div>
+  <div class="rate-presets" id="ratePresets">
+    <button data-r="1">×1</button>
+    <button data-r="2">×2</button>
+    <button data-r="3">×3</button>
+    <button data-r="5">×5</button>
+    <button data-r="10">×10</button>
+  </div>
+  <input class="text-field" id="rateInput" type="number" inputmode="numeric" min="1" step="1" placeholder="その他の倍率を入力">
+  <button class="confirm-btn" id="rateConfirm">このレートにする</button>
+</div>
+
+<!-- 参加者追加シート -->
+<div class="sheet" id="nameSheet" role="dialog" aria-modal="true">
+  <div class="sheet-grip"></div>
+  <div class="sheet-title">参加者を追加</div>
+  <input class="text-field" id="nameInput" type="text" maxlength="12" placeholder="名前（例: 田中）" autocomplete="off">
+  <button class="confirm-btn" id="nameConfirm">追加する</button>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ====== Supabase接続設定（セットアップ時にここを書き換える） ====== */
+  var SUPABASE_URL = 'PASTE_SUPABASE_URL';
+  var SUPABASE_ANON_KEY = 'PASTE_SUPABASE_ANON_KEY';
+  /* =============================================================== */
+
+  if (SUPABASE_URL.indexOf('http') !== 0) {
+    document.body.innerHTML =
+      '<div style="padding:40px 24px;text-align:center;color:#8E8E93;font-size:15px;line-height:2">' +
+      'まだ接続設定がされていません。<br>index.html の SUPABASE_URL / SUPABASE_ANON_KEY を設定してください。</div>';
+    return;
+  }
+  var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  /* この時間以上あいだが空いたら「別の日（別セッション）」扱い */
+  var SESSION_GAP = 3 * 60 * 60 * 1000;
+
+  var ICON = {
+    ok: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.4l2.4 2.4 4.6-5"/></svg>',
+    warn: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.8 2.8 19.5h18.4L12 3.8z"/><path d="M12 9.8v4"/><path d="M12 16.8v.2"/></svg>',
+    info: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.8v.2"/></svg>',
+    x: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    back: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5.5 8.5 12l6.5 6.5"/></svg>',
+    copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6a2.5 2.5 0 0 1 2.5-2.5H16"/></svg>'
+  };
+
+  var state = { rate: 1, players: [], entries: [] };
+  var pending = 0;
+  var loaded = false;
+  var lastSessions = [];
+  var selectedKey = null;
+
+  /* ---------- サーバー通信（Supabase） ---------- */
+
+  function syncUI() {
+    document.getElementById('subLabel').textContent =
+      pending > 0 ? '同期中…' : '麻雀チップ収支';
+  }
+
+  async function fetchState() {
+    var res = await Promise.all([
+      sb.from('players').select('id,name,color').order('created_at'),
+      sb.from('entries').select('id,player_id,chips,rate,created_at').order('created_at'),
+      sb.from('settings').select('value').eq('key', 'rate').maybeSingle()
+    ]);
+    var err = res[0].error || res[1].error || res[2].error;
+    if (err) throw err;
+    var players = res[0].data.map(function (p) {
+      return { id: p.id, name: p.name, color: Number(p.color) || 0 };
+    });
+    var nameById = {};
+    players.forEach(function (p) { nameById[p.id] = p.name; });
+    var entries = res[1].data.map(function (e) {
+      return {
+        id: e.id,
+        playerId: e.player_id,
+        name: nameById[e.player_id] || '（不明）',
+        chips: e.chips,
+        rate: e.rate,
+        delta: e.chips * e.rate,
+        ts: Date.parse(e.created_at)
+      };
+    });
+    return {
+      rate: res[2].data ? Number(res[2].data.value) : 1,
+      players: players,
+      entries: entries
+    };
+  }
+
+  async function refresh() {
+    pending++;
+    syncUI();
+    try {
+      state = await fetchState();
+      loaded = true;
+      render();
+    } catch (e) {
+      toast('通信エラー。電波状況を確認してください');
+    } finally {
+      pending = Math.max(0, pending - 1);
+      syncUI();
+    }
+  }
+
+  function friendlyError(e) {
+    if (e && e.code === '23505') return '同じ名前の参加者がいます';
+    if (e && e.code === '23503') return '参加者が見つかりません（削除された可能性）';
+    return '通信エラー。もう一度お試しください';
+  }
+
+  /* 変更系の共通処理: 実行 → エラーはトースト → 最新状態を取り直す */
+  async function mutate(fn) {
+    pending++;
+    syncUI();
+    try {
+      var res = await fn();
+      if (res && res.error) throw res.error;
+    } catch (e) {
+      toast(friendlyError(e));
+    } finally {
+      pending = Math.max(0, pending - 1);
+      syncUI();
+    }
+    refresh();
+  }
+
+  /* リアルタイム同期: 誰かの変更を全員の画面に即反映 */
+  var rtTimer = null;
+  sb.channel('chipcho')
+    .on('postgres_changes', { event: '*', schema: 'public' }, function () {
+      clearTimeout(rtTimer);
+      rtTimer = setTimeout(function () {
+        if (pending === 0) refresh();
+      }, 250);
+    })
+    .subscribe();
+
+  /* 保険のポーリング（リアルタイム接続が切れた場合用）+ 画面復帰時 */
+  setInterval(function () {
+    if (!openId && pending === 0 && !document.hidden) refresh();
+  }, 60000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && pending === 0) refresh();
+  });
+
+  /* ---------- util ---------- */
+
+  var WD = ['日', '月', '火', '水', '木', '金', '土'];
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+  function fmt(n) {
+    var s = Math.abs(n).toLocaleString('ja-JP');
+    return (n > 0 ? '+' : n < 0 ? '−' : '±') + s;
+  }
+  function fmtDate(ts) {
+    var d = new Date(ts);
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WD[d.getDay()] + '）';
+  }
+  function fmtTime(ts) {
+    var d = new Date(ts);
+    return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  }
+
+  function totals() {
+    var map = {};
+    state.players.forEach(function (p) { map[p.id] = 0; });
+    state.entries.forEach(function (e) {
+      if (map[e.playerId] !== undefined) map[e.playerId] += e.delta;
+    });
+    return map;
+  }
+  function grandTotal() {
+    return state.entries.reduce(function (a, e) { return a + e.delta; }, 0);
+  }
+
+  /* 3時間ルールでセッション（=1回の卓）に分割。古い順に返す */
+  function groupSessions(entries) {
+    var sorted = entries.slice().sort(function (a, b) { return a.ts - b.ts; });
+    var sessions = [];
+    var cur = null;
+    sorted.forEach(function (e) {
+      if (!cur || e.ts - cur.lastTs > SESSION_GAP) {
+        cur = { start: e.ts, lastTs: e.ts, entries: [] };
+        sessions.push(cur);
+      }
+      cur.entries.push(e);
+      cur.lastTs = e.ts;
+    });
+    return sessions;
+  }
+
+  function findSession(key) {
+    for (var i = 0; i < lastSessions.length; i++) {
+      var s = lastSessions[i];
+      if (key >= s.start && key <= s.lastTs) return s;
+    }
+    return null;
+  }
+
+  function sessionMeta(s) {
+    var ongoing = Date.now() - s.lastTs <= SESSION_GAP;
+    var sameDay = new Date(s.start).toDateString() === new Date(s.lastTs).toDateString();
+    var range = fmtTime(s.start) + (s.entries.length > 1
+      ? '〜' + (sameDay ? '' : '翌') + fmtTime(s.lastTs) : '');
+    var t = {};
+    var names = {};
+    var sum = 0;
+    s.entries.forEach(function (e) {
+      if (!(e.playerId in t)) { t[e.playerId] = 0; names[e.playerId] = e.name; }
+      t[e.playerId] += e.delta;
+      sum += e.delta;
+    });
+    /* 表示順はどの日付でも参加者リストの登録順で統一（削除済みの人は末尾） */
+    var order = [];
+    state.players.forEach(function (p) {
+      if (p.id in t) order.push({ id: p.id, name: p.name });
+    });
+    Object.keys(t).forEach(function (id) {
+      var known = state.players.some(function (p) { return p.id === id; });
+      if (!known) order.push({ id: id, name: names[id] });
+    });
+    return { ongoing: ongoing, range: range, totals: t, order: order, sum: sum };
+  }
+
+  /* ---------- タブ切り替え ---------- */
+
+  function switchView(name) {
+    $('viewInput').hidden = name !== 'input';
+    $('viewChart').hidden = name !== 'chart';
+    $('viewHistory').hidden = name !== 'history';
+    $('tabInput').classList.toggle('active', name === 'input');
+    $('tabChart').classList.toggle('active', name === 'chart');
+    $('tabHistory').classList.toggle('active', name === 'history');
+    if (name === 'chart' && loaded) renderChart();
+    window.scrollTo(0, 0);
+  }
+  $('tabInput').addEventListener('click', function () { switchView('input'); });
+  $('tabChart').addEventListener('click', function () { switchView('chart'); });
+  $('tabHistory').addEventListener('click', function () { switchView('history'); });
+
+  /* ---------- render ---------- */
+
+  function render() {
+    if (!loaded) return;
+    $('rateVal').textContent = '×' + state.rate;
+    renderBanner();
+    renderPlayers();
+    renderHistory();
+    renderChart();
+  }
+
+  /* 参加者のグラフカラー（1〜8）。未設定なら登録順で自動割り当て */
+  function playerSlot(p, idx) {
+    return (p.color >= 1 && p.color <= 8) ? p.color : (idx % 8) + 1;
+  }
+
+  function renderBanner() {
+    var b = $('banner');
+    b.classList.remove('skel', 'skel-banner');
+    if (state.entries.length === 0) {
+      b.className = 'banner';
+      b.innerHTML = ICON.info + '<span>参加者をタップしてチップを記録します</span>';
+      return;
+    }
+    var g = grandTotal();
+    if (g === 0) {
+      b.className = 'banner ok';
+      b.innerHTML = ICON.ok + '<span>全体合計 <strong>0pt</strong> — 帳尻が合っています</span>';
+    } else {
+      b.className = 'banner warn';
+      b.innerHTML = ICON.warn + '<span>全体合計 <strong>' + fmt(g) + 'pt</strong> — 入力漏れ・重複がないか確認</span>';
+    }
+  }
+
+  function renderPlayers() {
+    var t = totals();
+    $('players').innerHTML = state.players.map(function (p, i) {
+      var v = t[p.id] || 0;
+      var cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+      var n = state.entries.filter(function (e) { return e.playerId === p.id; }).length;
+      return '<button class="player-card" data-id="' + p.id + '" aria-label="' + esc(p.name) + ' に記録">' +
+        '<span class="player-name"><span class="p-dot" style="background:var(--col' + playerSlot(p, i) + ')"></span><span class="pn">' + esc(p.name) + '</span></span>' +
+        '<span class="player-pts ' + cls + '">' + fmt(v) + '</span>' +
+        '<span class="player-hint">' + n + '回の記録</span>' +
+        '</button>';
+    }).join('');
+  }
+
+  function renderHistory() {
+    var grid = $('sessionsGrid');
+    var detail = $('sessionDetail');
+    lastSessions = state.entries.length ? groupSessions(state.entries) : [];
+
+    if (selectedKey !== null) {
+      var s = findSession(selectedKey);
+      if (s) {
+        grid.hidden = true;
+        detail.hidden = false;
+        detail.innerHTML = '<button class="back-btn" id="backToList">' + ICON.back + '日付一覧</button>' + sessionHtml(s);
+        return;
+      }
+      selectedKey = null;
+    }
+
+    detail.hidden = true;
+    grid.hidden = false;
+    if (lastSessions.length === 0) {
+      grid.innerHTML = '<p class="history-empty">まだ記録がありません</p>';
+      return;
+    }
+    var html = '';
+    for (var i = lastSessions.length - 1; i >= 0; i--) {
+      html += dayCardHtml(lastSessions[i]);
+    }
+    grid.innerHTML = html;
+  }
+
+  /* 日付ブロック（2列グリッドの1マス）: 参加者ごとの収支を表示 */
+  function dayCardHtml(s) {
+    var m = sessionMeta(s);
+    var rows = m.order.map(function (p) {
+      var v = m.totals[p.id];
+      var cls = v > 0 ? 'pos' : v < 0 ? 'neg' : '';
+      return '<span class="day-row"><span class="day-p">' + esc(p.name) + '</span>' +
+        '<b class="' + cls + '">' + fmt(v) + '</b></span>';
+    }).join('');
+    var flag = m.ongoing
+      ? '<span class="session-live">進行中</span>'
+      : (m.sum !== 0 ? '<span class="day-warn">⚠ ' + fmt(m.sum) + '</span>' : '');
+    return '<button class="day-card" data-key="' + s.start + '">' +
+      '<span class="day-date">' + fmtDate(s.start) + flag + '</span>' +
+      '<span class="day-sub">' + m.range + '・' + s.entries.length + '件</span>' +
+      '<span class="day-players">' + rows + '</span>' +
+      '</button>';
+  }
+
+  /* その日の詳細（最終収支 + 記録一覧） */
+  function sessionHtml(s) {
+    var m = sessionMeta(s);
+    var sumRows = m.order.map(function (p) {
+      var v = m.totals[p.id];
+      var cls = v > 0 ? 'pos' : v < 0 ? 'neg' : '';
+      return '<div class="sum-row"><span>' + esc(p.name) + '</span>' +
+        '<b class="' + cls + '">' + fmt(v) + '</b></div>';
+    }).join('');
+    sumRows += '<div class="sum-row total"><span>合計</span><b class="' +
+      (m.sum === 0 ? 'ok' : 'bad') + '">' + fmt(m.sum) + (m.sum === 0 ? ' ✓' : ' ⚠') + '</b></div>';
+
+    var rows = s.entries.slice().reverse().map(function (e) {
+      var cls = e.delta >= 0 ? 'pos' : 'neg';
+      return '<li>' +
+        '<span class="h-time">' + fmtTime(e.ts) + '</span>' +
+        '<span class="h-name">' + esc(e.name) + '</span>' +
+        '<span class="h-calc">' + (e.chips > 0 ? '+' : '−') + Math.abs(e.chips) + '枚 ×' + e.rate + '</span>' +
+        '<span class="h-delta ' + cls + '">' + fmt(e.delta) + '</span>' +
+        '<button class="h-del" data-id="' + e.id + '" aria-label="この記録を削除">' + ICON.x + '</button>' +
+        '</li>';
+    }).join('');
+
+    return '<section class="session">' +
+      '<div class="session-head">' +
+        '<span class="session-date">' + fmtDate(s.start) +
+          (m.ongoing ? '<span class="session-live">進行中</span>' : '') + '</span>' +
+        '<span class="session-range">' + m.range + '</span>' +
+        '<button class="session-copy" data-key="' + s.start + '">' + ICON.copy + 'コピー</button>' +
+      '</div>' +
+      '<div class="session-summary">' +
+        '<span class="cap">' + (m.ongoing ? 'ここまでの収支' : 'この日の最終収支') + '</span>' +
+        sumRows +
+      '</div>' +
+      '<ul class="history-list">' + rows + '</ul>' +
+      '</section>';
+  }
+
+  /* ---------- 推移グラフ ---------- */
+
+  var hiddenIds = {};   /* 凡例タップで非表示にした参加者 */
+  var chartData = null; /* ツールチップ用の描画時データ */
+
+  function niceStep(raw) {
+    if (!(raw > 0)) return 1;
+    var mag = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+    var n = raw / mag;
+    return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * mag;
+  }
+
+  function renderChart() {
+    var wrap = $('chartCard');
+    if ($('viewChart').hidden) return;
+    var sess = state.entries.length ? groupSessions(state.entries) : [];
+    if (!state.players.length || !sess.length) {
+      wrap.innerHTML = '<p class="chart-empty">記録が増えると、ここに卓ごとの累計推移が表示されます</p>';
+      return;
+    }
+
+    /* 卓ごとの累計を組み立て（先頭は開始時点=0） */
+    var series = state.players.map(function (p, i) {
+      return { id: p.id, name: p.name, slot: playerSlot(p, i), vals: [0] };
+    });
+    sess.forEach(function (s) {
+      var d = {};
+      s.entries.forEach(function (e) { d[e.playerId] = (d[e.playerId] || 0) + e.delta; });
+      series.forEach(function (sr) { sr.vals.push(sr.vals[sr.vals.length - 1] + (d[sr.id] || 0)); });
+    });
+    var labels = ['開始'].concat(sess.map(function (s) {
+      var d = new Date(s.start);
+      return (d.getMonth() + 1) + '/' + d.getDate();
+    }));
+
+    var legend = series.map(function (sr) {
+      return '<button class="lg-chip' + (hiddenIds[sr.id] ? ' off' : '') + '" data-id="' + sr.id + '">' +
+        '<span class="lg-dot" style="background:var(--col' + sr.slot + ')"></span>' + esc(sr.name) + '</button>';
+    }).join('');
+
+    var visible = series.filter(function (sr) { return !hiddenIds[sr.id]; });
+    if (!visible.length) {
+      wrap.innerHTML = '<div class="chart-legend">' + legend + '</div>' +
+        '<p class="chart-empty">凡例をタップして表示する参加者を選んでください</p>';
+      return;
+    }
+
+    var min = 0, max = 0;
+    visible.forEach(function (sr) {
+      sr.vals.forEach(function (v) { if (v < min) min = v; if (v > max) max = v; });
+    });
+    if (min === max) max = min + 1;
+    var step = niceStep((max - min) / 4);
+    var y0 = Math.floor(min / step) * step;
+    var y1 = Math.ceil(max / step) * step;
+
+    var W = Math.max(280, wrap.clientWidth - 30);
+    var H = 250;
+    var padL = 8, padR = 84, padT = 14, padB = 24;
+    var iw = W - padL - padR, ih = H - padT - padB;
+    var n = labels.length;
+    function X(i) { return padL + (n === 1 ? 0 : i * iw / (n - 1)); }
+    function Y(v) { return padT + (y1 - v) / (y1 - y0) * ih; }
+
+    var svg = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="卓ごとの累計収支の推移">';
+
+    /* 横グリッド + Y目盛り（0ラインは強調） */
+    for (var t = y0; t <= y1; t += step) {
+      var ty = Y(t);
+      var zero = (t === 0);
+      svg += '<line x1="' + padL + '" x2="' + (W - padR + 42) + '" y1="' + ty + '" y2="' + ty + '"' +
+        ' stroke="var(' + (zero ? '--muted' : '--line') + ')" stroke-width="1"' + (zero ? '' : ' stroke-opacity=".8"') + '/>';
+      svg += '<text x="' + padL + '" y="' + (ty - 4) + '" font-size="10" fill="var(--muted)">' +
+        t.toLocaleString('ja-JP') + '</text>';
+    }
+
+    /* X目盛り（混みすぎ防止で間引き） */
+    var skip = Math.ceil(n / 6);
+    for (var i = 0; i < n; i++) {
+      if (i % skip !== 0 && i !== n - 1) continue;
+      var anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
+      svg += '<text x="' + X(i) + '" y="' + (H - 6) + '" font-size="10" fill="var(--muted)" text-anchor="' + anchor + '">' + labels[i] + '</text>';
+    }
+
+    /* 折れ線 + 点（点は白フチで重なり対策） */
+    visible.forEach(function (sr) {
+      var pts = sr.vals.map(function (v, i) { return X(i) + ',' + Y(v); }).join(' ');
+      svg += '<polyline points="' + pts + '" fill="none" stroke="var(--col' + sr.slot + ')" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+      if (n <= 16) {
+        sr.vals.forEach(function (v, i) {
+          svg += '<circle cx="' + X(i) + '" cy="' + Y(v) + '" r="3" fill="var(--col' + sr.slot + ')" stroke="var(--surface)" stroke-width="1.5"/>';
+        });
+      }
+    });
+
+    /* 線の右端に名前と現在値（重なりはずらす） */
+    var ends = visible.map(function (sr) {
+      return { y: Y(sr.vals[n - 1]), name: sr.name, val: sr.vals[n - 1] };
+    }).sort(function (a, b) { return a.y - b.y; });
+    for (var j = 1; j < ends.length; j++) {
+      if (ends[j].y - ends[j - 1].y < 13) ends[j].y = ends[j - 1].y + 13;
+    }
+    ends.forEach(function (e) {
+      var ly = Math.min(H - padB - 2, Math.max(padT + 6, e.y));
+      svg += '<text x="' + (W - padR + 8) + '" y="' + (ly + 3.5) + '" font-size="11">' +
+        '<tspan fill="var(--ink)" font-weight="600">' + esc(e.name.slice(0, 4)) + '</tspan>' +
+        '<tspan fill="var(--muted)" dx="4">' + fmt(e.val) + '</tspan></text>';
+    });
+
+    /* タップ位置のクロスヘア（初期は非表示） */
+    svg += '<line class="cross" x1="-10" x2="-10" y1="' + padT + '" y2="' + (H - padB) + '" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>';
+    svg += '</svg>';
+
+    wrap.innerHTML = '<div class="chart-legend">' + legend + '</div>' +
+      '<div class="chart-box">' + svg + '<div class="chart-tip" hidden></div></div>' +
+      '<p class="chart-hint">グラフをなぞると各日の累計・凡例タップで表示切替</p>';
+
+    chartData = { labels: labels, visible: visible, X: X, n: n, W: W, padL: padL, padR: padR };
+    bindChartPointer(wrap);
+  }
+
+  $('chartCard').addEventListener('click', function (ev) {
+    var chip = ev.target.closest && ev.target.closest('.lg-chip');
+    if (!chip) return;
+    var id = chip.getAttribute('data-id');
+    hiddenIds[id] = !hiddenIds[id];
+    renderChart();
+  });
+
+  function bindChartPointer(wrap) {
+    var svgEl = wrap.querySelector('svg');
+    var tip = wrap.querySelector('.chart-tip');
+    if (!svgEl || !tip) return;
+    var cross = svgEl.querySelector('.cross');
+
+    function show(ev) {
+      var d = chartData;
+      if (!d) return;
+      var r = svgEl.getBoundingClientRect();
+      var cx = ev.clientX - r.left;
+      var span = d.n === 1 ? 1 : (d.W - d.padL - d.padR) / (d.n - 1);
+      var i = Math.round((cx - d.padL) / span);
+      i = Math.max(0, Math.min(d.n - 1, i));
+      var x = d.X(i);
+      cross.setAttribute('x1', x);
+      cross.setAttribute('x2', x);
+      cross.setAttribute('opacity', '1');
+      var rows = d.visible.slice()
+        .sort(function (a, b) { return b.vals[i] - a.vals[i]; })
+        .map(function (sr) {
+          return '<div class="tt-row"><span class="tt-l">' +
+            '<span class="tt-dot" style="background:var(--col' + sr.slot + ')"></span>' +
+            esc(sr.name) + '</span><b>' + fmt(sr.vals[i]) + '</b></div>';
+        }).join('');
+      tip.innerHTML = '<div class="tt-date">' + d.labels[i] + '</div>' + rows;
+      tip.hidden = false;
+      var left = x < d.W / 2 ? x + 14 : x - tip.offsetWidth - 14;
+      tip.style.left = Math.max(0, Math.min(d.W - tip.offsetWidth, left)) + 'px';
+    }
+    function hide() {
+      tip.hidden = true;
+      cross.setAttribute('opacity', '0');
+    }
+    svgEl.addEventListener('pointerdown', show);
+    svgEl.addEventListener('pointermove', function (ev) {
+      if (ev.pointerType === 'mouse' || ev.buttons) show(ev);
+    });
+    svgEl.addEventListener('pointerleave', hide);
+    svgEl.addEventListener('pointerup', function () { setTimeout(hide, 1500); });
+  }
+
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (loaded && !$('viewChart').hidden) renderChart();
+    }, 150);
+  });
+
+  /* ---------- sheets ---------- */
+
+  var openId = null;
+  function openSheet(id) {
+    openId = id;
+    $('backdrop').classList.add('show');
+    $(id).classList.add('show');
+  }
+  function closeSheet() {
+    if (!openId) return;
+    $(openId).classList.remove('show');
+    $('backdrop').classList.remove('show');
+    openId = null;
+  }
+  $('backdrop').addEventListener('click', closeSheet);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeSheet();
+  });
+
+  /* ---------- チップ記録 ---------- */
+
+  var entry = { playerId: null, sign: 1, digits: '' };
+
+  function openEntry(playerId) {
+    var p = state.players.filter(function (x) { return x.id === playerId; })[0];
+    if (!p) return;
+    entry = { playerId: playerId, sign: 1, digits: '' };
+    $('entryWho').textContent = p.name;
+    setSign(1);
+    disarm($('removePlayer'), 'この参加者を削除');
+    renderEntryPreview();
+    renderColorRow();
+    openSheet('entrySheet');
+  }
+
+  function renderColorRow() {
+    var cur = 0;
+    state.players.forEach(function (p, i) {
+      if (p.id === entry.playerId) cur = playerSlot(p, i);
+    });
+    var html = '';
+    for (var c = 1; c <= 8; c++) {
+      html += '<button class="csw' + (c === cur ? ' active' : '') + '" data-c="' + c +
+        '" style="background:var(--col' + c + ')" aria-label="グラフカラー' + c + '"></button>';
+    }
+    $('colorRow').innerHTML = html;
+  }
+
+  $('colorRow').addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('.csw');
+    if (!b || !entry.playerId) return;
+    Array.prototype.forEach.call($('colorRow').children, function (x) {
+      x.classList.toggle('active', x === b);
+    });
+    var c = Number(b.getAttribute('data-c'));
+    mutate(function () {
+      return sb.from('players').update({ color: c }).eq('id', entry.playerId);
+    });
+  });
+
+  function setSign(s) {
+    entry.sign = s;
+    $('signPos').classList.toggle('active', s === 1);
+    $('signNeg').classList.toggle('active', s === -1);
+    renderEntryPreview();
+  }
+  $('signPos').addEventListener('click', function () { setSign(1); });
+  $('signNeg').addEventListener('click', function () { setSign(-1); });
+
+  function renderEntryPreview() {
+    var n = parseInt(entry.digits || '0', 10);
+    var delta = entry.sign * n * state.rate;
+    var cls = delta > 0 ? 'pos' : delta < 0 ? 'neg' : '';
+    $('entryPreview').innerHTML =
+      '<span>' + n + '枚 × レート' + state.rate + ' =</span>' +
+      '<strong class="' + cls + '">' + fmt(delta) + 'pt</strong>';
+    $('entryConfirm').disabled = n === 0;
+  }
+
+  $('entryKeypad').addEventListener('click', function (ev) {
+    var btn = ev.target.closest && ev.target.closest('[data-k]');
+    if (!btn) return;
+    var k = btn.getAttribute('data-k');
+    if (k === 'C') entry.digits = '';
+    else if (k === 'B') entry.digits = entry.digits.slice(0, -1);
+    else if (entry.digits.length < 4) entry.digits += k;
+    renderEntryPreview();
+  });
+
+  $('entryConfirm').addEventListener('click', function () {
+    var n = parseInt(entry.digits || '0', 10);
+    if (!n || !entry.playerId) return;
+    var payload = { player_id: entry.playerId, chips: entry.sign * n, rate: state.rate };
+    mutate(function () { return sb.from('entries').insert(payload); });
+    closeSheet();
+  });
+
+  $('removePlayer').addEventListener('click', function () {
+    var btn = this;
+    if (!btn.classList.contains('arm')) {
+      arm(btn, '本当に削除する？（記録も消えます）');
+      return;
+    }
+    var id = entry.playerId;
+    mutate(function () { return sb.from('players').delete().eq('id', id); });
+    closeSheet();
+  });
+
+  function arm(btn, label) {
+    btn.classList.add('arm');
+    btn.textContent = label;
+    btn._t = setTimeout(function () { disarmDefault(btn); }, 3000);
+  }
+  function disarm(btn, label) {
+    clearTimeout(btn._t);
+    btn.classList.remove('arm');
+    btn.textContent = label;
+  }
+  function disarmDefault(btn) {
+    if (btn === $('removePlayer')) disarm(btn, 'この参加者を削除');
+    if (btn === $('resetBtn')) disarm(btn, '新しいゲームを始める');
+  }
+
+  /* ---------- レート ---------- */
+
+  $('rateBtn').addEventListener('click', function () {
+    $('rateInput').value = '';
+    highlightPreset(state.rate);
+    openSheet('rateSheet');
+  });
+
+  function highlightPreset(r) {
+    Array.prototype.forEach.call($('ratePresets').children, function (b) {
+      b.classList.toggle('active', Number(b.getAttribute('data-r')) === r);
+    });
+  }
+
+  function setRate(r) {
+    mutate(function () {
+      return sb.from('settings').update({ value: r }).eq('key', 'rate');
+    });
+    closeSheet();
+    toast('レートを ×' + r + ' にしました');
+  }
+
+  $('ratePresets').addEventListener('click', function (ev) {
+    var btn = ev.target.closest && ev.target.closest('[data-r]');
+    if (!btn) return;
+    setRate(Number(btn.getAttribute('data-r')));
+  });
+
+  $('rateConfirm').addEventListener('click', function () {
+    var v = parseInt($('rateInput').value, 10);
+    if (!v || v < 1) { toast('1以上の数を入れてください'); return; }
+    setRate(v);
+  });
+
+  /* ---------- 参加者追加 ---------- */
+
+  $('addPlayerBtn').addEventListener('click', function () {
+    $('nameInput').value = '';
+    openSheet('nameSheet');
+    setTimeout(function () { $('nameInput').focus(); }, 300);
+  });
+
+  $('nameConfirm').addEventListener('click', addPlayer);
+  $('nameInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') addPlayer();
+  });
+
+  function addPlayer() {
+    var name = $('nameInput').value.trim().slice(0, 12);
+    if (!name) { toast('名前を入れてください'); return; }
+    if (state.players.some(function (p) { return p.name === name; })) {
+      toast('同じ名前の参加者がいます');
+      return;
+    }
+    /* 未使用のグラフカラー(1〜8)を割り当て */
+    var used = {};
+    state.players.forEach(function (p, i) { used[playerSlot(p, i)] = true; });
+    var slot = (state.players.length % 8) + 1;
+    for (var c = 1; c <= 8; c++) { if (!used[c]) { slot = c; break; } }
+    mutate(function () {
+      return sb.from('players').insert({ name: name, color: slot });
+    });
+    closeSheet();
+  }
+
+  /* ---------- 履歴（日付ブロック → 詳細） ---------- */
+
+  $('sessionsGrid').addEventListener('click', function (ev) {
+    var card = ev.target.closest && ev.target.closest('.day-card');
+    if (!card) return;
+    selectedKey = Number(card.getAttribute('data-key'));
+    renderHistory();
+    window.scrollTo(0, 0);
+  });
+
+  $('sessionDetail').addEventListener('click', function (ev) {
+    var back = ev.target.closest && ev.target.closest('#backToList');
+    if (back) {
+      selectedKey = null;
+      renderHistory();
+      return;
+    }
+
+    var del = ev.target.closest && ev.target.closest('.h-del');
+    if (del) {
+      if (!del.classList.contains('arm')) {
+        del.classList.add('arm');
+        del.textContent = '削除';
+        setTimeout(function () {
+          del.classList.remove('arm');
+          del.innerHTML = ICON.x;
+        }, 3000);
+        return;
+      }
+      var id = del.getAttribute('data-id');
+      mutate(function () { return sb.from('entries').delete().eq('id', id); });
+      return;
+    }
+
+    var cp = ev.target.closest && ev.target.closest('.session-copy');
+    if (cp) {
+      var s = findSession(Number(cp.getAttribute('data-key')));
+      if (s) copySession(s);
+    }
+  });
+
+  function copySession(s) {
+    var m = sessionMeta(s);
+    var lines = ['【' + fmtDate(s.start) + 'の収支】'];
+    m.order.forEach(function (p) { lines.push(p.name + '　' + fmt(m.totals[p.id])); });
+    lines.push('合計　' + fmt(m.sum) + (m.sum === 0 ? ' ✅' : ' ⚠️'));
+    copyText(lines.join('\n'));
+  }
+
+  /* ---------- プレイヤータップ ---------- */
+
+  $('players').addEventListener('click', function (ev) {
+    var card = ev.target.closest && ev.target.closest('.player-card');
+    if (card) openEntry(card.getAttribute('data-id'));
+  });
+
+  /* ---------- 更新・コピー ---------- */
+
+  $('refreshBtn').addEventListener('click', refresh);
+  $('chartRefreshBtn').addEventListener('click', refresh);
+
+  $('copyBtn').addEventListener('click', function () {
+    var t = totals();
+    var lines = ['【チップ収支・累計】' + fmtDate(Date.now()) + ' ' + fmtTime(Date.now()) + ' 時点'];
+    state.players.forEach(function (p) {
+      lines.push(p.name + '　' + fmt(t[p.id] || 0));
+    });
+    var g = grandTotal();
+    lines.push('合計　' + fmt(g) + (g === 0 ? ' ✅' : ' ⚠️'));
+    copyText(lines.join('\n'));
+  });
+
+  function copyText(text) {
+    function done() { toast('コピーしました。LINEに貼り付けできます'); }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); }
+      catch (e) { toast('コピーできませんでした'); }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  /* ---------- リセット（2タップ確認） ---------- */
+
+  $('resetBtn').addEventListener('click', function () {
+    var btn = this;
+    if (!btn.classList.contains('arm')) {
+      arm(btn, '本当にリセット？（履歴が消えます）');
+      return;
+    }
+    disarm(btn, '新しいゲームを始める');
+    mutate(function () {
+      return sb.from('entries').delete().gte('created_at', '1970-01-01');
+    });
+    toast('履歴をクリアしました（参加者とレートは維持）');
+  });
+
+  /* ---------- toast ---------- */
+
+  var toastTimer = null;
+  function toast(msg) {
+    var el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2500);
+  }
+
+  /* ---------- 起動 ---------- */
+
+  refresh();
+})();
+</script>
+</body>
+</html>

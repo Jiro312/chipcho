@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0F7B55"/>
+  <circle cx="256" cy="256" r="150" fill="#FFF9F0"/>
+  <circle cx="256" cy="256" r="96" fill="#0F7B55"/>
+  <circle cx="256" cy="256" r="96" fill="none" stroke="#FFF9F0" stroke-width="10" stroke-dasharray="24 26"/>
+  <g fill="#FFF9F0">
+    <rect x="238" y="86" width="36" height="44" rx="8"/>
+    <rect x="238" y="382" width="36" height="44" rx="8"/>
+    <rect x="86" y="238" width="44" height="36" rx="8"/>
+    <rect x="382" y="238" width="44" height="36" rx="8"/>
+  </g>
+  <text x="256" y="300" font-family="Hiragino Mincho ProN, serif" font-size="120" font-weight="700" fill="#FFF9F0" text-anchor="middle">帳</text>
+</svg>
