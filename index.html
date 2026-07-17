@@ -1220,14 +1220,17 @@
 
   function renderPlayers() {
     var t = totals();
-    $('players').innerHTML = state.players.map(function (p, i) {
-      var v = t[p.id] || 0;
-      var cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
-      var n = state.entries.filter(function (e) { return e.playerId === p.id; }).length;
-      return '<button class="player-card" data-id="' + p.id + '" aria-label="' + esc(p.name) + ' に記録">' +
-        '<span class="player-name"><span class="p-dot" style="background:var(--col' + playerSlot(p, i) + ')"></span><span class="pn">' + esc(p.name) + '</span></span>' +
-        '<span class="player-pts ' + cls + '">' + fmt(v) + '</span>' +
-        '<span class="player-hint">' + n + '回の記録</span>' +
+    /* 累計の多い順（1位→最下位）。色は登録順ベースなので並べ替え前に確定させる */
+    var ranked = state.players.map(function (p, i) {
+      return { p: p, slot: playerSlot(p, i), v: t[p.id] || 0, reg: i };
+    }).sort(function (a, b) { return b.v - a.v || a.reg - b.reg; });
+    $('players').innerHTML = ranked.map(function (x, rank) {
+      var cls = x.v > 0 ? 'pos' : x.v < 0 ? 'neg' : 'zero';
+      var n = state.entries.filter(function (e) { return e.playerId === x.p.id; }).length;
+      return '<button class="player-card" data-id="' + x.p.id + '" aria-label="' + esc(x.p.name) + ' に記録">' +
+        '<span class="player-name"><span class="p-dot" style="background:var(--col' + x.slot + ')"></span><span class="pn">' + esc(x.p.name) + '</span></span>' +
+        '<span class="player-pts ' + cls + '">' + fmt(x.v) + '</span>' +
+        '<span class="player-hint">' + (rank + 1) + '位・' + n + '回の記録</span>' +
         '</button>';
     }).join('');
   }
