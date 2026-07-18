@@ -1342,18 +1342,28 @@
       return;
     }
 
-    /* 卓ごとの累計を組み立て（先頭は開始時点=0） */
+    /* 記録1件ごとの累計を組み立て（先頭は開始時点=0） */
+    var sorted = state.entries.slice().sort(function (a, b) { return a.ts - b.ts; });
     var series = state.players.map(function (p, i) {
       return { id: p.id, name: p.name, slot: playerSlot(p, i), vals: [0] };
     });
-    sess.forEach(function (s) {
-      var d = {};
-      s.entries.forEach(function (e) { d[e.playerId] = (d[e.playerId] || 0) + e.delta; });
-      series.forEach(function (sr) { sr.vals.push(sr.vals[sr.vals.length - 1] + (d[sr.id] || 0)); });
+    var ticks = [];   /* 卓の始まり位置（日付ラベル・区切り線用） */
+    var prevTs = null;
+    sorted.forEach(function (e, k) {
+      series.forEach(function (sr) {
+        var last = sr.vals[sr.vals.length - 1];
+        sr.vals.push(last + (e.playerId === sr.id ? e.delta : 0));
+      });
+      if (prevTs === null || e.ts - prevTs > SESSION_GAP) {
+        var d = new Date(e.ts);
+        ticks.push({ i: k + 1, label: (d.getMonth() + 1) + '/' + d.getDate() });
+      }
+      prevTs = e.ts;
     });
-    var labels = ['開始'].concat(sess.map(function (s) {
-      var d = new Date(s.start);
-      return (d.getMonth() + 1) + '/' + d.getDate();
+    /* ツールチップ用: 各記録の日時 */
+    var labels = ['開始'].concat(sorted.map(function (e) {
+      var d = new Date(e.ts);
+      return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + fmtTime(e.ts);
     }));
 
     var legend = series.map(function (sr) {
@@ -1385,7 +1395,7 @@
     function X(i) { return padL + (n === 1 ? 0 : i * iw / (n - 1)); }
     function Y(v) { return padT + (y1 - v) / (y1 - y0) * ih; }
 
-    var svg = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="卓ごとの累計収支の推移">';
+    var svg = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="全記録の累計収支の推移">';
 
     /* 横グリッド + Y目盛り（0ラインは強調） */
     for (var t = y0; t <= y1; t += step) {
@@ -1397,15 +1407,17 @@
         t.toLocaleString('ja-JP') + '</text>';
     }
 
-    /* X目盛り（混みすぎ防止で間引き） */
-    var skip = Math.ceil(n / 6);
-    for (var i = 0; i < n; i++) {
-      if (i % skip !== 0 && i !== n - 1) continue;
-      var anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
-      svg += '<text x="' + X(i) + '" y="' + (H - 6) + '" font-size="10" fill="var(--muted)" text-anchor="' + anchor + '">' + labels[i] + '</text>';
-    }
+    /* 卓の区切り線 + 日付ラベル（混みすぎ防止で間引き） */
+    var showEvery = Math.ceil(ticks.length / 6);
+    ticks.forEach(function (tk, idx) {
+      var tx = X(tk.i);
+      svg += '<line x1="' + tx + '" x2="' + tx + '" y1="' + padT + '" y2="' + (H - padB) +
+        '" stroke="var(--line)" stroke-width="1" stroke-dasharray="2 4"/>';
+      if (idx % showEvery !== 0 && idx !== ticks.length - 1) return;
+      svg += '<text x="' + tx + '" y="' + (H - 6) + '" font-size="10" fill="var(--muted)" text-anchor="middle">' + tk.label + '</text>';
+    });
 
-    /* 折れ線 + 点（点は白フチで重なり対策） */
+    /* 折れ線 + 点（記録が少ないときだけ全点、常に終点マーカー） */
     visible.forEach(function (sr) {
       var pts = sr.vals.map(function (v, i) { return X(i) + ',' + Y(v); }).join(' ');
       svg += '<polyline points="' + pts + '" fill="none" stroke="var(--col' + sr.slot + ')" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
@@ -1413,6 +1425,8 @@
         sr.vals.forEach(function (v, i) {
           svg += '<circle cx="' + X(i) + '" cy="' + Y(v) + '" r="3" fill="var(--col' + sr.slot + ')" stroke="var(--surface)" stroke-width="1.5"/>';
         });
+      } else {
+        svg += '<circle cx="' + X(n - 1) + '" cy="' + Y(sr.vals[n - 1]) + '" r="3" fill="var(--col' + sr.slot + ')" stroke="var(--surface)" stroke-width="1.5"/>';
       }
     });
 
@@ -1436,7 +1450,7 @@
 
     wrap.innerHTML = '<div class="chart-legend">' + legend + '</div>' +
       '<div class="chart-box">' + svg + '<div class="chart-tip" hidden></div></div>' +
-      '<p class="chart-hint">グラフをなぞると各日の累計・凡例タップで表示切替</p>';
+      '<p class="chart-hint">グラフをなぞると各記録時点の累計・凡例タップで表示切替</p>';
 
     chartData = { labels: labels, visible: visible, X: X, n: n, W: W, padL: padL, padR: padR };
     bindChartPointer(wrap);
