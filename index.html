@@ -491,21 +491,6 @@
     box-shadow: var(--card-shadow);
   }
 
-  .reset-row { margin-top: 6px; }
-  .reset-btn {
-    width: 100%;
-    background: var(--surface);
-    border-radius: 14px;
-    padding: 14px;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--neg);
-    box-shadow: var(--card-shadow);
-    transition: transform .12s ease-out;
-  }
-  .reset-btn:active { transform: scale(.98); }
-  .reset-btn.arm { background: var(--neg); color: #FFF; }
-
   /* ===== 推移グラフ ===== */
   .chart-card {
     background: var(--surface);
@@ -882,9 +867,6 @@
     </div>
     <div class="session-grid" id="sessionsGrid"></div>
     <div id="sessionDetail" hidden></div>
-    <div class="reset-row">
-      <button class="reset-btn" id="resetBtn">新しいゲームを始める</button>
-    </div>
   </div>
 </div>
 
@@ -1634,7 +1616,6 @@
   }
   function disarmDefault(btn) {
     if (btn === $('removePlayer')) disarm(btn, 'この参加者を削除');
-    if (btn === $('resetBtn')) disarm(btn, '新しいゲームを始める');
   }
 
   /* ---------- レート ---------- */
@@ -1793,21 +1774,6 @@
       fallback();
     }
   }
-
-  /* ---------- リセット（2タップ確認） ---------- */
-
-  $('resetBtn').addEventListener('click', function () {
-    var btn = this;
-    if (!btn.classList.contains('arm')) {
-      arm(btn, '本当にリセット？（履歴が消えます）');
-      return;
-    }
-    disarm(btn, '新しいゲームを始める');
-    mutate(function () {
-      return sb.from('entries').delete().gte('created_at', '1970-01-01');
-    });
-    toast('履歴をクリアしました（参加者とレートは維持）');
-  });
 
   /* ---------- toast ---------- */
 
