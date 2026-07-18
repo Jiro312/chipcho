@@ -489,6 +489,32 @@
   }
 
   /* ===== 推移グラフ ===== */
+  .chart-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .seg-sm { grid-template-columns: 1fr 1fr 1fr; }
+  .seg-sm button { padding: 8px; font-size: 13px; }
+  .seg-sm button.active { color: var(--tint); }
+  .period-chips {
+    display: flex;
+    gap: 6px;
+  }
+  .period-chips button {
+    flex: 1;
+    background: var(--key-bg);
+    border-radius: 999px;
+    padding: 6px 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--muted);
+    transition: background .15s, color .15s;
+  }
+  .period-chips button.active {
+    background: var(--tint);
+    color: var(--on-tint);
+  }
   .chart-card {
     background: var(--surface);
     border-radius: 14px;
@@ -844,6 +870,18 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 4v5h-5"/></svg>
         更新
       </button>
+    </div>
+    <div class="chart-controls">
+      <div class="seg seg-sm" id="chartModeSeg">
+        <button data-m="entry">記録ごと</button>
+        <button data-m="session">卓ごと</button>
+        <button data-m="rank">順位</button>
+      </div>
+      <div class="period-chips" id="periodChips">
+        <button data-d="0">全期間</button>
+        <button data-d="30">30日</button>
+        <button data-d="7">7日</button>
+      </div>
     </div>
     <div class="chart-card" id="chartCard">
       <p class="chart-empty">読み込み中…</p>
@@ -1298,6 +1336,14 @@
 
   var hiddenIds = {};   /* 凡例タップで非表示にした参加者 */
   var chartData = null; /* ツールチップ用の描画時データ */
+  var chartMode = 'entry';  /* entry=記録ごと | session=卓ごと | rank=順位 */
+  var chartDays = 0;        /* 0=全期間, 30, 7 */
+  try {
+    var _m = localStorage.getItem('chipcho-chart-mode');
+    if (_m === 'session' || _m === 'rank') chartMode = _m;
+    var _d = Number(localStorage.getItem('chipcho-chart-days'));
+    if (_d === 30 || _d === 7) chartDays = _d;
+  } catch (e) {}
 
   function niceStep(raw) {
     if (!(raw > 0)) return 1;
@@ -1306,95 +1352,180 @@
     return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * mag;
   }
 
-  function renderChart() {
-    var wrap = $('chartCard');
-    if ($('viewChart').hidden) return;
-    var sess = state.entries.length ? groupSessions(state.entries) : [];
-    if (!state.players.length || !sess.length) {
-      wrap.innerHTML = '<p class="chart-empty">記録が増えると、ここに卓ごとの累計推移が表示されます</p>';
-      return;
-    }
+  function mdLabel(ts) {
+    var d = new Date(ts);
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  }
 
-    /* 記録1件ごとの累計を組み立て（先頭は開始時点=0） */
-    var sorted = state.entries.slice().sort(function (a, b) { return a.ts - b.ts; });
-    var series = state.players.map(function (p, i) {
-      return { id: p.id, name: p.name, slot: playerSlot(p, i), vals: [0] };
+  function seriesBase() {
+    return state.players.map(function (p, i) {
+      return { id: p.id, name: p.name, slot: playerSlot(p, i), vals: [] };
     });
-    var ticks = [];   /* 卓の始まり位置（日付ラベル・区切り線用） */
+  }
+
+  /* 記録1件ごとの累計（期間指定時はゼロスタート） */
+  function buildEntryModel(cut) {
+    var ents = state.entries.filter(function (e) { return e.ts >= cut; })
+      .sort(function (a, b) { return a.ts - b.ts; });
+    if (!ents.length) return null;
+    var series = seriesBase();
+    series.forEach(function (sr) { sr.vals.push(0); });
+    var ticks = [];
     var prevTs = null;
-    sorted.forEach(function (e, k) {
+    ents.forEach(function (e, k) {
       series.forEach(function (sr) {
         var last = sr.vals[sr.vals.length - 1];
         sr.vals.push(last + (e.playerId === sr.id ? e.delta : 0));
       });
       if (prevTs === null || e.ts - prevTs > SESSION_GAP) {
-        var d = new Date(e.ts);
-        ticks.push({ i: k + 1, label: (d.getMonth() + 1) + '/' + d.getDate() });
+        ticks.push({ i: k + 1, label: mdLabel(e.ts) });
       }
       prevTs = e.ts;
     });
-    /* ツールチップ用: 各記録の日時 */
-    var labels = ['開始'].concat(sorted.map(function (e) {
-      var d = new Date(e.ts);
-      return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + fmtTime(e.ts);
+    var labels = ['開始'].concat(ents.map(function (e) {
+      return mdLabel(e.ts) + ' ' + fmtTime(e.ts);
     }));
+    return { series: series, labels: labels, ticks: ticks, yType: 'pt', sep: true };
+  }
 
-    var legend = series.map(function (sr) {
+  /* 卓ごとの累計（期間指定時はゼロスタート） */
+  function buildSessionModel(cut) {
+    var ents = state.entries.filter(function (e) { return e.ts >= cut; });
+    if (!ents.length) return null;
+    var sess = groupSessions(ents);
+    var series = seriesBase();
+    series.forEach(function (sr) { sr.vals.push(0); });
+    sess.forEach(function (s) {
+      var d = {};
+      s.entries.forEach(function (e) { d[e.playerId] = (d[e.playerId] || 0) + e.delta; });
+      series.forEach(function (sr) {
+        sr.vals.push(sr.vals[sr.vals.length - 1] + (d[sr.id] || 0));
+      });
+    });
+    var labels = ['開始'].concat(sess.map(function (s) { return mdLabel(s.start); }));
+    var ticks = sess.map(function (s, k) { return { i: k + 1, label: mdLabel(s.start) }; });
+    return { series: series, labels: labels, ticks: ticks, yType: 'pt', sep: false };
+  }
+
+  /* 卓終了時点の順位変動（順位は常に全期間の累計で判定、期間は表示範囲のみ） */
+  function buildRankModel(cut) {
+    var sessAll = groupSessions(state.entries);
+    var cum = {};
+    state.players.forEach(function (p) { cum[p.id] = 0; });
+    var kept = [];
+    sessAll.forEach(function (s) {
+      s.entries.forEach(function (e) {
+        if (cum[e.playerId] !== undefined) cum[e.playerId] += e.delta;
+      });
+      if (s.start >= cut) {
+        var snap = {};
+        state.players.forEach(function (p) { snap[p.id] = cum[p.id]; });
+        kept.push({ start: s.start, cum: snap });
+      }
+    });
+    if (!kept.length) return null;
+    var series = seriesBase();
+    kept.forEach(function (k) {
+      series.forEach(function (sr) {
+        var mine = k.cum[sr.id];
+        var rank = 1;
+        state.players.forEach(function (p) { if (k.cum[p.id] > mine) rank++; });
+        sr.vals.push(rank);
+      });
+    });
+    var labels = kept.map(function (k) { return mdLabel(k.start); });
+    var ticks = kept.map(function (k, i) { return { i: i, label: mdLabel(k.start) }; });
+    return { series: series, labels: labels, ticks: ticks, yType: 'rank', sep: false };
+  }
+
+  function renderChart() {
+    if ($('viewChart').hidden) return;
+    syncChartControls();
+    var wrap = $('chartCard');
+    if (!state.players.length || !state.entries.length) {
+      wrap.innerHTML = '<p class="chart-empty">記録が増えると、ここに収支の推移が表示されます</p>';
+      return;
+    }
+    var cut = chartDays ? Date.now() - chartDays * 86400000 : 0;
+    var model = chartMode === 'rank' ? buildRankModel(cut)
+      : chartMode === 'session' ? buildSessionModel(cut)
+      : buildEntryModel(cut);
+    if (!model) {
+      wrap.innerHTML = '<p class="chart-empty">この期間の記録はありません</p>';
+      return;
+    }
+    drawChart(wrap, model);
+  }
+
+  function drawChart(wrap, model) {
+    var legend = model.series.map(function (sr) {
       return '<button class="lg-chip' + (hiddenIds[sr.id] ? ' off' : '') + '" data-id="' + sr.id + '">' +
         '<span class="lg-dot" style="background:var(--col' + sr.slot + ')"></span>' + esc(sr.name) + '</button>';
     }).join('');
 
-    var visible = series.filter(function (sr) { return !hiddenIds[sr.id]; });
+    var visible = model.series.filter(function (sr) { return !hiddenIds[sr.id]; });
     if (!visible.length) {
       wrap.innerHTML = '<div class="chart-legend">' + legend + '</div>' +
         '<p class="chart-empty">凡例をタップして表示する参加者を選んでください</p>';
       return;
     }
 
-    var min = 0, max = 0;
-    visible.forEach(function (sr) {
-      sr.vals.forEach(function (v) { if (v < min) min = v; if (v > max) max = v; });
-    });
-    if (min === max) max = min + 1;
-    var step = niceStep((max - min) / 4);
-    var y0 = Math.floor(min / step) * step;
-    var y1 = Math.ceil(max / step) * step;
+    var n = model.labels.length;
+    var isRank = model.yType === 'rank';
+    var y0, y1, step;
+    if (isRank) {
+      y0 = 1;
+      y1 = Math.max(2, state.players.length);
+      step = 1;
+    } else {
+      var min = 0, max = 0;
+      visible.forEach(function (sr) {
+        sr.vals.forEach(function (v) { if (v < min) min = v; if (v > max) max = v; });
+      });
+      if (min === max) max = min + 1;
+      step = niceStep((max - min) / 4);
+      y0 = Math.floor(min / step) * step;
+      y1 = Math.ceil(max / step) * step;
+    }
 
     var W = Math.max(280, wrap.clientWidth - 30);
     var H = 250;
     var padL = 8, padR = 84, padT = 14, padB = 24;
     var iw = W - padL - padR, ih = H - padT - padB;
-    var n = labels.length;
-    function X(i) { return padL + (n === 1 ? 0 : i * iw / (n - 1)); }
-    function Y(v) { return padT + (y1 - v) / (y1 - y0) * ih; }
+    function X(i) { return padL + (n === 1 ? iw / 2 : i * iw / (n - 1)); }
+    function Y(v) {
+      return isRank
+        ? padT + (v - y0) / (y1 - y0) * ih          /* 1位が上 */
+        : padT + (y1 - v) / (y1 - y0) * ih;
+    }
 
-    var svg = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="全記録の累計収支の推移">';
+    var svg = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="収支の推移">';
 
-    /* 横グリッド + Y目盛り（0ラインは強調） */
     for (var t = y0; t <= y1; t += step) {
       var ty = Y(t);
-      var zero = (t === 0);
+      var zero = !isRank && t === 0;
       svg += '<line x1="' + padL + '" x2="' + (W - padR + 42) + '" y1="' + ty + '" y2="' + ty + '"' +
         ' stroke="var(' + (zero ? '--muted' : '--line') + ')" stroke-width="1"' + (zero ? '' : ' stroke-opacity=".8"') + '/>';
       svg += '<text x="' + padL + '" y="' + (ty - 4) + '" font-size="10" fill="var(--muted)">' +
-        t.toLocaleString('ja-JP') + '</text>';
+        (isRank ? t + '位' : t.toLocaleString('ja-JP')) + '</text>';
     }
 
-    /* 卓の区切り線 + 日付ラベル（混みすぎ防止で間引き） */
-    var showEvery = Math.ceil(ticks.length / 6);
-    ticks.forEach(function (tk, idx) {
+    var showEvery = Math.ceil(model.ticks.length / 6);
+    model.ticks.forEach(function (tk, idx) {
       var tx = X(tk.i);
-      svg += '<line x1="' + tx + '" x2="' + tx + '" y1="' + padT + '" y2="' + (H - padB) +
-        '" stroke="var(--line)" stroke-width="1" stroke-dasharray="2 4"/>';
-      if (idx % showEvery !== 0 && idx !== ticks.length - 1) return;
+      if (model.sep) {
+        svg += '<line x1="' + tx + '" x2="' + tx + '" y1="' + padT + '" y2="' + (H - padB) +
+          '" stroke="var(--line)" stroke-width="1" stroke-dasharray="2 4"/>';
+      }
+      if (idx % showEvery !== 0 && idx !== model.ticks.length - 1) return;
       svg += '<text x="' + tx + '" y="' + (H - 6) + '" font-size="10" fill="var(--muted)" text-anchor="middle">' + tk.label + '</text>';
     });
 
-    /* 折れ線 + 点（記録が少ないときだけ全点、常に終点マーカー） */
+    var allDots = n <= 16 || isRank;
     visible.forEach(function (sr) {
       var pts = sr.vals.map(function (v, i) { return X(i) + ',' + Y(v); }).join(' ');
       svg += '<polyline points="' + pts + '" fill="none" stroke="var(--col' + sr.slot + ')" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
-      if (n <= 16) {
+      if (allDots) {
         sr.vals.forEach(function (v, i) {
           svg += '<circle cx="' + X(i) + '" cy="' + Y(v) + '" r="3" fill="var(--col' + sr.slot + ')" stroke="var(--surface)" stroke-width="1.5"/>';
         });
@@ -1403,7 +1534,6 @@
       }
     });
 
-    /* 線の右端に名前と現在値（重なりはずらす） */
     var ends = visible.map(function (sr) {
       return { y: Y(sr.vals[n - 1]), name: sr.name, val: sr.vals[n - 1] };
     }).sort(function (a, b) { return a.y - b.y; });
@@ -1414,26 +1544,52 @@
       var ly = Math.min(H - padB - 2, Math.max(padT + 6, e.y));
       svg += '<text x="' + (W - padR + 8) + '" y="' + (ly + 3.5) + '" font-size="11">' +
         '<tspan fill="var(--ink)" font-weight="600">' + esc(e.name.slice(0, 4)) + '</tspan>' +
-        '<tspan fill="var(--muted)" dx="4">' + fmt(e.val) + '</tspan></text>';
+        '<tspan fill="var(--muted)" dx="4">' + (isRank ? e.val + '位' : fmt(e.val)) + '</tspan></text>';
     });
 
-    /* タップ位置のクロスヘア（初期は非表示） */
     svg += '<line class="cross" x1="-10" x2="-10" y1="' + padT + '" y2="' + (H - padB) + '" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>';
     svg += '</svg>';
 
+    var hint = isRank
+      ? 'グラフをなぞると各卓終了時の順位・凡例タップで表示切替'
+      : 'グラフをなぞると各時点の累計・凡例タップで表示切替';
     wrap.innerHTML = '<div class="chart-legend">' + legend + '</div>' +
       '<div class="chart-box">' + svg + '<div class="chart-tip" hidden></div></div>' +
-      '<p class="chart-hint">グラフをなぞると各記録時点の累計・凡例タップで表示切替</p>';
+      '<p class="chart-hint">' + hint + '</p>';
 
-    chartData = { labels: labels, visible: visible, X: X, n: n, W: W, padL: padL, padR: padR };
+    chartData = { labels: model.labels, visible: visible, X: X, n: n, W: W, padL: padL, padR: padR, isRank: isRank };
     bindChartPointer(wrap);
   }
+
+  function syncChartControls() {
+    Array.prototype.forEach.call($('chartModeSeg').children, function (b) {
+      b.classList.toggle('active', b.getAttribute('data-m') === chartMode);
+    });
+    Array.prototype.forEach.call($('periodChips').children, function (b) {
+      b.classList.toggle('active', Number(b.getAttribute('data-d')) === chartDays);
+    });
+  }
+
+  $('chartModeSeg').addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('[data-m]');
+    if (!b) return;
+    chartMode = b.getAttribute('data-m');
+    try { localStorage.setItem('chipcho-chart-mode', chartMode); } catch (e) {}
+    renderChart();
+  });
+
+  $('periodChips').addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('[data-d]');
+    if (!b) return;
+    chartDays = Number(b.getAttribute('data-d'));
+    try { localStorage.setItem('chipcho-chart-days', String(chartDays)); } catch (e) {}
+    renderChart();
+  });
 
   $('chartCard').addEventListener('click', function (ev) {
     var chip = ev.target.closest && ev.target.closest('.lg-chip');
     if (!chip) return;
-    var id = chip.getAttribute('data-id');
-    hiddenIds[id] = !hiddenIds[id];
+    hiddenIds[chip.getAttribute('data-id')] = !hiddenIds[chip.getAttribute('data-id')];
     renderChart();
   });
 
@@ -1456,11 +1612,11 @@
       cross.setAttribute('x2', x);
       cross.setAttribute('opacity', '1');
       var rows = d.visible.slice()
-        .sort(function (a, b) { return b.vals[i] - a.vals[i]; })
+        .sort(function (a, b) { return d.isRank ? a.vals[i] - b.vals[i] : b.vals[i] - a.vals[i]; })
         .map(function (sr) {
           return '<div class="tt-row"><span class="tt-l">' +
             '<span class="tt-dot" style="background:var(--col' + sr.slot + ')"></span>' +
-            esc(sr.name) + '</span><b>' + fmt(sr.vals[i]) + '</b></div>';
+            esc(sr.name) + '</span><b>' + (d.isRank ? sr.vals[i] + '位' : fmt(sr.vals[i])) + '</b></div>';
         }).join('');
       tip.innerHTML = '<div class="tt-date">' + d.labels[i] + '</div>' + rows;
       tip.hidden = false;
@@ -1486,6 +1642,7 @@
       if (loaded && !$('viewChart').hidden) renderChart();
     }, 150);
   });
+
 
   /* ---------- sheets ---------- */
 
