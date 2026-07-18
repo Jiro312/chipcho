@@ -282,6 +282,30 @@
     grid-template-columns: 1fr;
     gap: 10px;
   }
+  .session-grid.two { grid-template-columns: 1fr 1fr; }
+  .session-grid.two .day-item.open { grid-column: 1 / -1; }
+  .session-grid.two .day-item:not(.open) .day-row { font-size: 13px; gap: 6px; }
+  .session-grid.two .day-item:not(.open) .day-rank { width: 26px; font-size: 11px; }
+  .session-grid.two .day-item:not(.open) .day-date { font-size: 14px; }
+
+  .col-toggle {
+    display: flex;
+    background: var(--key-bg);
+    border-radius: 9px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .col-toggle button {
+    padding: 5px 8px;
+    border-radius: 7px;
+    color: var(--muted);
+    transition: background .15s, color .15s;
+  }
+  .col-toggle button.active {
+    background: var(--surface);
+    color: var(--tint);
+    box-shadow: 0 1px 3px rgba(0,0,0,.12);
+  }
   .day-head {
     display: flex;
     align-items: center;
@@ -811,6 +835,14 @@
   <div class="view" id="viewHistory" hidden>
     <div class="history-head">
       <h2>履歴</h2>
+      <div class="col-toggle" id="colToggle" role="group" aria-label="表示列数">
+        <button data-cols="1" aria-label="1列表示">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="4" y="4.5" width="16" height="6" rx="1.8"/><rect x="4" y="13.5" width="16" height="6" rx="1.8"/></svg>
+        </button>
+        <button data-cols="2" aria-label="2列表示">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="4" y="4.5" width="6.5" height="6" rx="1.8"/><rect x="13.5" y="4.5" width="6.5" height="6" rx="1.8"/><rect x="4" y="13.5" width="6.5" height="6" rx="1.8"/><rect x="13.5" y="13.5" width="6.5" height="6" rx="1.8"/></svg>
+        </button>
+      </div>
       <button class="head-btn" id="refreshBtn" aria-label="最新の状態に更新">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 4v5h-5"/></svg>
         更新
@@ -925,6 +957,9 @@
   var loaded = false;
   var lastSessions = [];
   var expandedKey = null; /* 開いている日付ブロック（セッション開始時刻） */
+  /* 履歴の列数（端末ごとに記憶） */
+  var histCols = 1;
+  try { if (localStorage.getItem('chipcho-hist-cols') === '2') histCols = 2; } catch (e) {}
 
   /* ---------- サーバー通信（Supabase） ---------- */
 
@@ -1173,6 +1208,10 @@
 
   function renderHistory() {
     var grid = $('sessionsGrid');
+    grid.classList.toggle('two', histCols === 2);
+    Array.prototype.forEach.call($('colToggle').children, function (b) {
+      b.classList.toggle('active', Number(b.getAttribute('data-cols')) === histCols);
+    });
     lastSessions = state.entries.length ? groupSessions(state.entries) : [];
     if (lastSessions.length === 0) {
       grid.innerHTML = '<p class="history-empty">まだ記録がありません</p>';
@@ -1613,7 +1652,15 @@
     closeSheet();
   }
 
-  /* ---------- 履歴（日付タップで展開・記録削除・コピー） ---------- */
+  /* ---------- 履歴（列数切替・日付タップで展開・記録削除・コピー） ---------- */
+
+  $('colToggle').addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('[data-cols]');
+    if (!b) return;
+    histCols = Number(b.getAttribute('data-cols'));
+    try { localStorage.setItem('chipcho-hist-cols', String(histCols)); } catch (e) {}
+    renderHistory();
+  });
 
   $('sessionsGrid').addEventListener('click', function (ev) {
     var del = ev.target.closest && ev.target.closest('.h-del');
