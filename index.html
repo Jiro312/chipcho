@@ -608,6 +608,120 @@
     box-shadow: 0 0 0 2.5px var(--sheet-bg), 0 0 0 5px var(--ink);
   }
 
+  /* ===== 役タブ ===== */
+  .win-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .win-card {
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 13px 14px;
+    box-shadow: var(--card-shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .win-card-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .win-name {
+    font-weight: 700;
+    font-size: 14px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .win-han {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--tint);
+    background: var(--tint-soft);
+    border-radius: 999px;
+    padding: 3px 10px;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .win-han.ym { color: var(--neg); background: var(--warn-bg); }
+  .win-time {
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .win-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .win-tag {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    background: var(--key-bg);
+    border-radius: 999px;
+    padding: 3px 9px;
+  }
+
+  /* 上がり記録シート */
+  .win-players {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .win-players button {
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 8px 15px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: var(--card-shadow);
+    transition: background .12s, color .12s, transform .1s ease-out;
+  }
+  .win-players button:active { transform: scale(.96); }
+  .win-players button.active { background: var(--tint); color: var(--on-tint); }
+  .win-players button.active .p-dot { background: var(--on-tint) !important; }
+
+  .yaku-scroll {
+    max-height: 34vh;
+    overflow-y: auto;
+    padding-right: 2px;
+  }
+  .yaku-group { margin-bottom: 12px; }
+  .yaku-group:last-child { margin-bottom: 0; }
+  .yaku-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    margin: 0 0 6px 2px;
+  }
+  .yaku-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .yaku-chip {
+    background: var(--key-bg);
+    border-radius: 999px;
+    padding: 7px 13px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    transition: background .12s, color .12s, transform .1s ease-out;
+  }
+  .yaku-chip:active { transform: scale(.94); }
+  .yaku-chip.active { background: var(--tint); color: var(--on-tint); }
+  .yaku-chip.yakuman { box-shadow: inset 0 0 0 1.5px var(--neg); color: var(--neg); }
+  .yaku-chip.yakuman.active { background: var(--neg); color: #fff; box-shadow: none; }
+
   /* ===== タブバー ===== */
   .tabbar {
     position: fixed;
@@ -615,7 +729,7 @@
     margin: 0 auto;
     max-width: 520px;
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
     background: color-mix(in srgb, var(--bg) 78%, transparent);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     backdrop-filter: blur(20px) saturate(180%);
@@ -911,6 +1025,23 @@
     </div>
     <div class="session-grid" id="sessionsGrid"></div>
   </div>
+
+  <!-- 役ビュー -->
+  <div class="view" id="viewYaku" hidden>
+    <div class="history-head">
+      <h2>役</h2>
+      <button class="head-btn" id="yakuRefreshBtn" aria-label="最新の状態に更新">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 4v5h-5"/></svg>
+        更新
+      </button>
+    </div>
+    <div id="yakuRankWrap"></div>
+    <button class="add-player" id="addWinBtn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      上がりを記録
+    </button>
+    <div class="win-list" id="winHistory"></div>
+  </div>
 </div>
 
 <nav class="tabbar">
@@ -921,6 +1052,10 @@
   <button id="tabChart" data-view="chart">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 17l5.5-5.5 4 4L20.5 8"/><path d="M14.5 8h6v6"/></svg>
     推移
+  </button>
+  <button id="tabYaku" data-view="yaku">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l4 6-10 12L6 9z"/><path d="M6 9h12M10.5 3 8 9l4 12M13.5 3 16 9l-4 12"/></svg>
+    役
   </button>
   <button id="tabHistory" data-view="history">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.8"/><path d="M12 7.5V12l3.2 2"/></svg>
@@ -978,6 +1113,16 @@
   <button class="confirm-btn" id="nameConfirm">追加する</button>
 </div>
 
+<!-- 上がり記録シート -->
+<div class="sheet" id="winSheet" role="dialog" aria-modal="true">
+  <div class="sheet-grip"></div>
+  <div class="sheet-title">上がりを記録</div>
+  <div class="win-players" id="winPlayers"></div>
+  <div class="yaku-scroll" id="yakuGroups"></div>
+  <div class="preview" id="winPreview"></div>
+  <button class="confirm-btn" id="winConfirm" disabled>記録する</button>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -1009,7 +1154,7 @@
     copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6a2.5 2.5 0 0 1 2.5-2.5H16"/></svg>'
   };
 
-  var state = { rate: 1, players: [], entries: [] };
+  var state = { rate: 1, players: [], entries: [], wins: [] };
   var pending = 0;
   var loaded = false;
   var lastSessions = [];
@@ -1029,10 +1174,15 @@
     var res = await Promise.all([
       sb.from('players').select('id,name,color').order('created_at'),
       sb.from('entries').select('id,player_id,chips,rate,created_at').order('created_at'),
-      sb.from('settings').select('value').eq('key', 'rate').maybeSingle()
+      sb.from('settings').select('value').eq('key', 'rate').maybeSingle(),
+      /* winsテーブル未作成（add_wins.sql未実行）でも入力・履歴が壊れないよう、このクエリだけ個別に失敗を許容する */
+      sb.from('wins').select('id,player_id,yaku,han,created_at').order('created_at').then(
+        function (r) { return r; }, function () { return { data: [], error: null }; }
+      )
     ]);
     var err = res[0].error || res[1].error || res[2].error;
     if (err) throw err;
+    if (res[3].error) res[3] = { data: [], error: null };
     var players = res[0].data.map(function (p) {
       return { id: p.id, name: p.name, color: Number(p.color) || 0 };
     });
@@ -1049,10 +1199,21 @@
         ts: Date.parse(e.created_at)
       };
     });
+    var wins = (res[3].data || []).map(function (w) {
+      return {
+        id: w.id,
+        playerId: w.player_id,
+        name: nameById[w.player_id] || '（不明）',
+        yaku: w.yaku || [],
+        han: w.han,
+        ts: Date.parse(w.created_at)
+      };
+    });
     return {
       rate: res[2].data ? Number(res[2].data.value) : 1,
       players: players,
-      entries: entries
+      entries: entries,
+      wins: wins
     };
   }
 
@@ -1202,15 +1363,18 @@
   function switchView(name) {
     $('viewInput').hidden = name !== 'input';
     $('viewChart').hidden = name !== 'chart';
+    $('viewYaku').hidden = name !== 'yaku';
     $('viewHistory').hidden = name !== 'history';
     $('tabInput').classList.toggle('active', name === 'input');
     $('tabChart').classList.toggle('active', name === 'chart');
+    $('tabYaku').classList.toggle('active', name === 'yaku');
     $('tabHistory').classList.toggle('active', name === 'history');
     if (name === 'chart' && loaded) renderChart();
     window.scrollTo(0, 0);
   }
   $('tabInput').addEventListener('click', function () { switchView('input'); });
   $('tabChart').addEventListener('click', function () { switchView('chart'); });
+  $('tabYaku').addEventListener('click', function () { switchView('yaku'); });
   $('tabHistory').addEventListener('click', function () { switchView('history'); });
 
   /* ---------- render ---------- */
@@ -1222,9 +1386,39 @@
     renderPlayers();
     renderHistory();
     renderChart();
+    renderYakuTab();
   }
 
   var COLOR_MAX = 11;
+
+  /* 役一覧（h=翻数、ym=役満扱い。役満は13翻換算・複合役満は26翻などで表示切替） */
+  var YAKU_LIST = [
+    { n: '立直', h: 1 }, { n: '一発', h: 1 }, { n: 'ツモ', h: 1 },
+    { n: '平和', h: 1 }, { n: 'タンヤオ', h: 1 }, { n: '一盃口', h: 1 },
+    { n: '役牌', h: 1 }, { n: '嶺上開花', h: 1 }, { n: '槍槓', h: 1 },
+    { n: '海底摸月', h: 1 }, { n: '河底撈魚', h: 1 },
+    { n: 'ダブル立直', h: 2 }, { n: '七対子', h: 2 }, { n: '三色同順', h: 2 },
+    { n: '一気通貫', h: 2 }, { n: '対々和', h: 2 }, { n: '三暗刻', h: 2 },
+    { n: '混老頭', h: 2 }, { n: 'チャンタ', h: 2 }, { n: '小三元', h: 2 },
+    { n: '三色同刻', h: 2 }, { n: '三槓子', h: 2 },
+    { n: '二盃口', h: 3 }, { n: '混一色', h: 3 }, { n: '純チャン', h: 3 },
+    { n: '清一色', h: 6 },
+    { n: '国士無双', h: 13, ym: true }, { n: '四暗刻', h: 13, ym: true },
+    { n: '大三元', h: 13, ym: true }, { n: '字一色', h: 13, ym: true },
+    { n: '緑一色', h: 13, ym: true }, { n: '清老頭', h: 13, ym: true },
+    { n: '小四喜', h: 13, ym: true }, { n: '大四喜', h: 26, ym: true },
+    { n: '九蓮宝燈', h: 13, ym: true }, { n: '四槓子', h: 13, ym: true },
+    { n: '天和', h: 13, ym: true }, { n: '地和', h: 13, ym: true }
+  ];
+  var YAKU_GROUPS = [
+    { label: '1翻', h: 1 }, { label: '2翻', h: 2 }, { label: '3翻', h: 3 },
+    { label: '6翻', h: 6 }, { label: '役満', ym: true }
+  ];
+  function hanLabel(han) {
+    if (han >= 26) return (han / 13) + '倍役満';
+    if (han >= 13) return '役満';
+    return han + '翻';
+  }
 
   /* 参加者のグラフカラー（1〜11）。未設定なら登録順で自動割り当て */
   function playerSlot(p, idx) {
@@ -1331,6 +1525,135 @@
       body +
       '</section>';
   }
+
+  /* ---------- 役タブ ---------- */
+
+  function renderYakuTab() {
+    var wrap = $('yakuRankWrap');
+    if (!state.wins.length) {
+      wrap.innerHTML = '';
+    } else {
+      var counts = {};
+      state.wins.forEach(function (w) { counts[w.playerId] = (counts[w.playerId] || 0) + 1; });
+      var ranked = state.players.map(function (p) {
+        return { name: p.name, v: counts[p.id] || 0 };
+      }).filter(function (x) { return x.v > 0; })
+        .sort(function (a, b) { return b.v - a.v; });
+      var rows = ranked.map(function (x, i) {
+        return '<span class="day-row"><span class="day-rank">' + (i + 1) + '位</span>' +
+          '<span class="day-p">' + esc(x.name) + '</span>' +
+          '<b>' + x.v + '回</b></span>';
+      }).join('');
+      wrap.innerHTML = '<section class="session"><div class="day-ranking">' + rows + '</div></section>';
+    }
+
+    var hist = $('winHistory');
+    if (!state.wins.length) {
+      hist.innerHTML = '<p class="history-empty">まだ上がりの記録がありません</p>';
+      return;
+    }
+    var sorted = state.wins.slice().sort(function (a, b) { return b.ts - a.ts; });
+    hist.innerHTML = sorted.map(function (w) {
+      var p = state.players.filter(function (x) { return x.id === w.playerId; })[0];
+      var idx = state.players.indexOf(p);
+      var slot = p ? playerSlot(p, idx) : 0;
+      var tags = w.yaku.map(function (y) { return '<span class="win-tag">' + esc(y) + '</span>'; }).join('');
+      return '<div class="win-card">' +
+        '<div class="win-card-top">' +
+        (slot ? '<span class="p-dot" style="background:var(--col' + slot + ')"></span>' : '') +
+        '<span class="win-name">' + esc(w.name) + '</span>' +
+        '<span class="win-han' + (w.han >= 13 ? ' ym' : '') + '">' + hanLabel(w.han) + '</span>' +
+        '<span class="win-time">' + mdLabel(w.ts) + ' ' + fmtTime(w.ts) + '</span>' +
+        '<button class="h-del" data-id="' + w.id + '" aria-label="この記録を削除">' + ICON.x + '</button>' +
+        '</div>' +
+        '<div class="win-tags">' + tags + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  $('addWinBtn').addEventListener('click', openWinSheet);
+  $('yakuRefreshBtn').addEventListener('click', refresh);
+
+  var winState = { playerId: null, yaku: {} };
+
+  function openWinSheet() {
+    winState = { playerId: state.players.length === 1 ? state.players[0].id : null, yaku: {} };
+    renderWinPlayers();
+    renderYakuGroups();
+    renderWinPreview();
+    openSheet('winSheet');
+  }
+
+  function renderWinPlayers() {
+    $('winPlayers').innerHTML = state.players.map(function (p, i) {
+      var slot = playerSlot(p, i);
+      return '<button class="' + (winState.playerId === p.id ? 'active' : '') + '" data-id="' + p.id + '">' +
+        '<span class="p-dot" style="background:var(--col' + slot + ')"></span>' + esc(p.name) + '</button>';
+    }).join('');
+  }
+  $('winPlayers').addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('button');
+    if (!b) return;
+    winState.playerId = b.getAttribute('data-id');
+    renderWinPlayers();
+    renderWinPreview();
+  });
+
+  function renderYakuGroups() {
+    $('yakuGroups').innerHTML = YAKU_GROUPS.map(function (g) {
+      var items = YAKU_LIST.filter(function (y) { return g.ym ? y.ym : (y.h === g.h && !y.ym); });
+      var chips = items.map(function (y) {
+        return '<button class="yaku-chip' + (y.ym ? ' yakuman' : '') + (winState.yaku[y.n] ? ' active' : '') +
+          '" data-n="' + esc(y.n) + '" data-h="' + y.h + '">' + esc(y.n) + '</button>';
+      }).join('');
+      return '<div class="yaku-group"><p class="yaku-group-label">' + g.label + '</p>' +
+        '<div class="yaku-chips">' + chips + '</div></div>';
+    }).join('');
+  }
+  $('yakuGroups').addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('.yaku-chip');
+    if (!b) return;
+    var n = b.getAttribute('data-n');
+    if (winState.yaku[n]) delete winState.yaku[n];
+    else winState.yaku[n] = Number(b.getAttribute('data-h'));
+    renderYakuGroups();
+    renderWinPreview();
+  });
+
+  function renderWinPreview() {
+    var names = Object.keys(winState.yaku);
+    var han = names.reduce(function (a, n) { return a + winState.yaku[n]; }, 0);
+    var cls = han >= 13 ? 'neg' : '';
+    $('winPreview').innerHTML = names.length
+      ? '<span>' + names.length + '役 =</span><strong class="' + cls + '">' + hanLabel(han) + '</strong>'
+      : '<span>役を選んでください</span>';
+    $('winConfirm').disabled = !winState.playerId || names.length === 0;
+  }
+
+  $('winConfirm').addEventListener('click', function () {
+    var names = Object.keys(winState.yaku);
+    if (!winState.playerId || !names.length) return;
+    var han = names.reduce(function (a, n) { return a + winState.yaku[n]; }, 0);
+    var payload = { player_id: winState.playerId, yaku: names, han: han };
+    mutate(function () { return sb.from('wins').insert(payload); });
+    closeSheet();
+  });
+
+  $('winHistory').addEventListener('click', function (ev) {
+    var del = ev.target.closest && ev.target.closest('.h-del');
+    if (!del) return;
+    if (!del.classList.contains('arm')) {
+      del.classList.add('arm');
+      del.textContent = '削除';
+      setTimeout(function () {
+        del.classList.remove('arm');
+        del.innerHTML = ICON.x;
+      }, 3000);
+      return;
+    }
+    var id = del.getAttribute('data-id');
+    mutate(function () { return sb.from('wins').delete().eq('id', id); });
+  });
 
   /* ---------- 推移グラフ ---------- */
 
