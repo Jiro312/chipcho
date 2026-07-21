@@ -92,6 +92,8 @@
 
   body {
     margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
     background: var(--bg);
     color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;
@@ -1456,6 +1458,8 @@
     { label: '1翻', h: 1 }, { label: '2翻', h: 2 }, { label: '3翻', h: 3 },
     { label: '6翻', h: 6 }, { label: '役満', ym: true }
   ];
+  var YAKU_HAN = {}, YAKU_IDX = {};
+  YAKU_LIST.forEach(function (y, i) { YAKU_HAN[y.n] = y.h; YAKU_IDX[y.n] = i; });
   function hanLabel(han) {
     if (han >= 26) return (han / 13) + '倍役満';
     if (han >= 13) return '役満';
@@ -1585,7 +1589,7 @@
             counts[y]++;
           });
         });
-        order.sort(function (a, b) { return counts[b] - counts[a]; });
+        order.sort(function (a, b) { return (YAKU_HAN[a] || 0) - (YAKU_HAN[b] || 0) || YAKU_IDX[a] - YAKU_IDX[b]; });
         var total = order.reduce(function (a, y) { return a + counts[y]; }, 0);
         return { name: p.name, slot: playerSlot(p, i), total: total, tags: order.map(function (y) { return { n: y, c: counts[y] }; }) };
       }).filter(function (x) { return x.tags.length > 0; });
