@@ -668,6 +668,48 @@
     padding: 3px 9px;
   }
 
+  .yaku-stat-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .yaku-stat-name {
+    font-weight: 700;
+    font-size: 14px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .yaku-stat-total {
+    font-size: 11.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .yaku-stat-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .yaku-stat-tag {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--key-bg);
+    border-radius: 999px;
+    padding: 3px 9px;
+  }
+  .yaku-stat-tag b {
+    font-weight: 700;
+    color: var(--tint);
+    font-variant-numeric: tabular-nums;
+  }
+
   /* 上がり記録シート */
   .win-players {
     display: flex;
@@ -1533,18 +1575,34 @@
     if (!state.wins.length) {
       wrap.innerHTML = '';
     } else {
-      var counts = {};
-      state.wins.forEach(function (w) { counts[w.playerId] = (counts[w.playerId] || 0) + 1; });
-      var ranked = state.players.map(function (p) {
-        return { name: p.name, v: counts[p.id] || 0 };
-      }).filter(function (x) { return x.v > 0; })
-        .sort(function (a, b) { return b.v - a.v; });
-      var rows = ranked.map(function (x, i) {
-        return '<span class="day-row"><span class="day-rank">' + (i + 1) + '位</span>' +
-          '<span class="day-p">' + esc(x.name) + '</span>' +
-          '<b>' + x.v + '回</b></span>';
-      }).join('');
-      wrap.innerHTML = '<section class="session"><div class="day-ranking">' + rows + '</div></section>';
+      var perPlayer = state.players.map(function (p, i) {
+        var counts = {};
+        var order = [];
+        state.wins.forEach(function (w) {
+          if (w.playerId !== p.id) return;
+          w.yaku.forEach(function (y) {
+            if (!(y in counts)) { counts[y] = 0; order.push(y); }
+            counts[y]++;
+          });
+        });
+        order.sort(function (a, b) { return counts[b] - counts[a]; });
+        var total = order.reduce(function (a, y) { return a + counts[y]; }, 0);
+        return { name: p.name, slot: playerSlot(p, i), total: total, tags: order.map(function (y) { return { n: y, c: counts[y] }; }) };
+      }).filter(function (x) { return x.tags.length > 0; });
+
+      wrap.innerHTML = '<div class="win-list">' + perPlayer.map(function (x) {
+        var tags = x.tags.map(function (t) {
+          return '<span class="yaku-stat-tag">' + esc(t.n) + '<b>' + t.c + '</b></span>';
+        }).join('');
+        return '<section class="session">' +
+          '<div class="yaku-stat-head">' +
+          (x.slot ? '<span class="p-dot" style="background:var(--col' + x.slot + ')"></span>' : '') +
+          '<span class="yaku-stat-name">' + esc(x.name) + '</span>' +
+          '<span class="yaku-stat-total">計' + x.total + '回</span>' +
+          '</div>' +
+          '<div class="yaku-stat-tags">' + tags + '</div>' +
+          '</section>';
+      }).join('') + '</div>';
     }
 
     var hist = $('winHistory');
