@@ -759,10 +759,22 @@
     font-size: 13px;
     font-weight: 600;
     color: var(--ink);
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
     transition: background .12s, color .12s, transform .1s ease-out;
   }
   .yaku-chip:active { transform: scale(.94); }
   .yaku-chip.active { background: var(--tint); color: var(--on-tint); }
+  .yaku-chip-local {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 1px 6px;
+  }
+  .yaku-chip.active .yaku-chip-local { color: var(--tint); }
   .yaku-chip.yakuman { box-shadow: inset 0 0 0 1.5px var(--neg); color: var(--neg); }
   .yaku-chip.yakuman.active { background: var(--neg); color: #fff; box-shadow: none; }
 
@@ -1446,16 +1458,19 @@
     { n: '混老頭', h: 2 }, { n: 'チャンタ', h: 2 }, { n: '小三元', h: 2 },
     { n: '三色同刻', h: 2 }, { n: '三槓子', h: 2 },
     { n: '二盃口', h: 3 }, { n: '混一色', h: 3 }, { n: '純チャン', h: 3 },
+    { n: '流し満貫', h: 5, local: true }, { n: '人和', h: 5, local: true },
     { n: '清一色', h: 6 },
     { n: '国士無双', h: 13, ym: true }, { n: '四暗刻', h: 13, ym: true },
     { n: '大三元', h: 13, ym: true }, { n: '字一色', h: 13, ym: true },
     { n: '緑一色', h: 13, ym: true }, { n: '清老頭', h: 13, ym: true },
+    { n: '大車輪', h: 13, ym: true, local: true },
     { n: '小四喜', h: 13, ym: true }, { n: '大四喜', h: 26, ym: true },
     { n: '九蓮宝燈', h: 13, ym: true }, { n: '四槓子', h: 13, ym: true },
     { n: '天和', h: 13, ym: true }, { n: '地和', h: 13, ym: true }
   ];
   var YAKU_GROUPS = [
     { label: '1翻', h: 1 }, { label: '2翻', h: 2 }, { label: '3翻', h: 3 },
+    { label: '5翻(満貫)', h: 5 },
     { label: '6翻', h: 6 }, { label: '役満', ym: true }
   ];
   var YAKU_HAN = {}, YAKU_IDX = {};
@@ -1666,7 +1681,8 @@
       var items = YAKU_LIST.filter(function (y) { return g.ym ? y.ym : (y.h === g.h && !y.ym); });
       var chips = items.map(function (y) {
         return '<button class="yaku-chip' + (y.ym ? ' yakuman' : '') + (winState.yaku[y.n] ? ' active' : '') +
-          '" data-n="' + esc(y.n) + '" data-h="' + y.h + '">' + esc(y.n) + '</button>';
+          '" data-n="' + esc(y.n) + '" data-h="' + y.h + '">' + esc(y.n) +
+          (y.local ? '<span class="yaku-chip-local">ローカル</span>' : '') + '</button>';
       }).join('');
       return '<div class="yaku-group"><p class="yaku-group-label">' + g.label + '</p>' +
         '<div class="yaku-chips">' + chips + '</div></div>';
