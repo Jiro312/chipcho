@@ -571,6 +571,8 @@
   }
   .tt-row b { font-weight: 700; }
   .tt-l { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+  .tt-r { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+  .tt-box { font-size: 10px; color: var(--muted); }
   .chart-hint {
     margin: 6px 0 0;
     font-size: 11px;
@@ -1446,6 +1448,13 @@
   }
 
   var COLOR_MAX = 11;
+  var CHIPS_PER_BOX = 20; /* チップ20枚で1箱 */
+
+  function boxText(chips) {
+    var boxes = Math.floor(chips / CHIPS_PER_BOX);
+    var rem = chips % CHIPS_PER_BOX;
+    return boxes + '箱' + (rem ? rem + '枚' : '');
+  }
 
   /* 役一覧（h=翻数、ym=役満扱い。役満は13翻換算・複合役満は26翻などで表示切替） */
   var YAKU_LIST = [
@@ -2015,9 +2024,15 @@
       var rows = d.visible.slice()
         .sort(function (a, b) { return d.isRank ? a.vals[i] - b.vals[i] : b.vals[i] - a.vals[i]; })
         .map(function (sr) {
+          var v = sr.vals[i];
+          var boxNote = '';
+          if (!d.isRank) {
+            var chips = Math.round(Math.abs(v) / (state.rate || 1));
+            if (chips >= CHIPS_PER_BOX) boxNote = '<span class="tt-box">' + boxText(chips) + '</span>';
+          }
           return '<div class="tt-row"><span class="tt-l">' +
             '<span class="tt-dot" style="background:var(--col' + sr.slot + ')"></span>' +
-            esc(sr.name) + '</span><b>' + (d.isRank ? sr.vals[i] + '位' : fmt(sr.vals[i])) + '</b></div>';
+            esc(sr.name) + '</span><span class="tt-r"><b>' + (d.isRank ? v + '位' : fmt(v)) + '</b>' + boxNote + '</span></div>';
         }).join('');
       tip.innerHTML = '<div class="tt-date">' + d.labels[i] + '</div>' + rows;
       tip.hidden = false;
@@ -2118,8 +2133,9 @@
     var n = parseInt(entry.digits || '0', 10);
     var delta = entry.sign * n * state.rate;
     var cls = delta > 0 ? 'pos' : delta < 0 ? 'neg' : '';
+    var boxNote = n >= CHIPS_PER_BOX ? '（' + boxText(n) + '）' : '';
     $('entryPreview').innerHTML =
-      '<span>' + n + '枚 × レート' + state.rate + ' =</span>' +
+      '<span>' + n + '枚' + boxNote + ' × レート' + state.rate + ' =</span>' +
       '<strong class="' + cls + '">' + fmt(delta) + 'pt</strong>';
     $('entryConfirm').disabled = n === 0;
   }
