@@ -1473,7 +1473,7 @@
   var BOXES_PER_CARTON = 10; /* 10箱で1カートン */
   var CHIPS_PER_CARTON = CHIPS_PER_BOX * BOXES_PER_CARTON;
 
-  /* 枚数をタバコの単位に換算（例: 250 → 1カートン2箱10枚）。符号は捨てて絶対量を返す */
+  /* 枚数をタバコの単位に換算（例: 250 → 1カートン2箱10本）。符号は捨てて絶対量を返す */
   function boxText(chips) {
     var n = Math.abs(Math.round(chips));
     var cartons = Math.floor(n / CHIPS_PER_CARTON);
@@ -1482,7 +1482,7 @@
     var s = '';
     if (cartons) s += cartons + 'カートン';
     if (boxes) s += boxes + '箱';
-    if (rem || !s) s += rem + '枚';
+    if (rem || !s) s += rem + '本';
     return s;
   }
 
