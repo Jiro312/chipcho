@@ -1773,13 +1773,30 @@
     });
   }
 
-  /* 記録1件ごとの累計（期間指定時はゼロスタート） */
+  /* 期間開始時点までの累計（期間指定時のスタート値。全期間なら全員0） */
+  function baseAt(cut) {
+    var base = {};
+    state.players.forEach(function (p) { base[p.id] = 0; });
+    if (!cut) return base;
+    state.entries.forEach(function (e) {
+      if (e.ts < cut && base[e.playerId] !== undefined) base[e.playerId] += e.delta;
+    });
+    return base;
+  }
+
+  /* 期間フィルタ時の起点ラベル（その時点のチップ枚数を表す） */
+  function startLabel(cut) {
+    return cut ? mdLabel(cut) + ' 時点' : '開始';
+  }
+
+  /* 記録1件ごとの累計（期間指定時はその時点のチップ枚数からスタート） */
   function buildEntryModel(cut) {
     var ents = state.entries.filter(function (e) { return e.ts >= cut; })
       .sort(function (a, b) { return a.ts - b.ts; });
     if (!ents.length) return null;
+    var base = baseAt(cut);
     var series = seriesBase();
-    series.forEach(function (sr) { sr.vals.push(0); });
+    series.forEach(function (sr) { sr.vals.push(base[sr.id] || 0); });
     var ticks = [];
     var prevTs = null;
     ents.forEach(function (e, k) {
@@ -1792,19 +1809,20 @@
       }
       prevTs = e.ts;
     });
-    var labels = ['開始'].concat(ents.map(function (e) {
+    var labels = [startLabel(cut)].concat(ents.map(function (e) {
       return mdLabel(e.ts) + ' ' + fmtTime(e.ts);
     }));
     return { series: series, labels: labels, ticks: ticks, yType: 'pt', sep: true };
   }
 
-  /* 卓ごとの累計（期間指定時はゼロスタート） */
+  /* 卓ごとの累計（期間指定時はその時点のチップ枚数からスタート） */
   function buildSessionModel(cut) {
     var ents = state.entries.filter(function (e) { return e.ts >= cut; });
     if (!ents.length) return null;
     var sess = groupSessions(ents);
+    var base = baseAt(cut);
     var series = seriesBase();
-    series.forEach(function (sr) { sr.vals.push(0); });
+    series.forEach(function (sr) { sr.vals.push(base[sr.id] || 0); });
     sess.forEach(function (s) {
       var d = {};
       s.entries.forEach(function (e) { d[e.playerId] = (d[e.playerId] || 0) + e.delta; });
@@ -1812,7 +1830,7 @@
         sr.vals.push(sr.vals[sr.vals.length - 1] + (d[sr.id] || 0));
       });
     });
-    var labels = ['開始'].concat(sess.map(function (s) { return mdLabel(s.start); }));
+    var labels = [startLabel(cut)].concat(sess.map(function (s) { return mdLabel(s.start); }));
     var ticks = sess.map(function (s, k) { return { i: k + 1, label: mdLabel(s.start) }; });
     return { series: series, labels: labels, ticks: ticks, yType: 'pt', sep: false };
   }
@@ -1888,10 +1906,14 @@
       y1 = Math.max(2, state.players.length);
       step = 1;
     } else {
-      var min = 0, max = 0;
+      var min = Infinity, max = -Infinity;
       visible.forEach(function (sr) {
         sr.vals.forEach(function (v) { if (v < min) min = v; if (v > max) max = v; });
       });
+      /* 0(トントン)が近ければ軸に含める。遠いときは実データの幅に合わせて拡大表示 */
+      var pad = (max - min) * 0.35;
+      if (min > 0 && min - pad <= 0) min = 0;
+      if (max < 0 && max + pad >= 0) max = 0;
       if (min === max) max = min + 1;
       step = niceStep((max - min) / 4);
       y0 = Math.floor(min / step) * step;
