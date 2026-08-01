@@ -233,6 +233,18 @@
   .player-pts.pos { color: var(--pos); }
   .player-pts.neg { color: var(--neg); }
   .player-pts.zero { color: var(--muted); }
+  .player-box {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    margin-bottom: 1px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .player-box.pos { color: var(--pos); }
+  .player-box.neg { color: var(--neg); }
+  .player-box.zero { color: var(--muted); }
   .player-hint { font-size: 11px; color: var(--muted); }
 
   .add-player {
@@ -1366,6 +1378,15 @@
   function grandTotal() {
     return state.entries.reduce(function (a, e) { return a + e.delta; }, 0);
   }
+  /* 実チップ枚数の累計。ptはレート込みなので、枚数は各記録のchipsをそのまま足す */
+  function chipTotals() {
+    var map = {};
+    state.players.forEach(function (p) { map[p.id] = 0; });
+    state.entries.forEach(function (e) {
+      if (map[e.playerId] !== undefined) map[e.playerId] += e.chips;
+    });
+    return map;
+  }
 
   /* 3時間ルールでセッション（=1回の卓）に分割。古い順に返す */
   function groupSessions(entries) {
@@ -1448,12 +1469,21 @@
   }
 
   var COLOR_MAX = 11;
-  var CHIPS_PER_BOX = 20; /* チップ20枚で1箱 */
+  var CHIPS_PER_BOX = 20;    /* チップ1枚=タバコ1本、20本で1箱 */
+  var BOXES_PER_CARTON = 10; /* 10箱で1カートン */
+  var CHIPS_PER_CARTON = CHIPS_PER_BOX * BOXES_PER_CARTON;
 
+  /* 枚数をタバコの単位に換算（例: 250 → 1カートン2箱10枚）。符号は捨てて絶対量を返す */
   function boxText(chips) {
-    var boxes = Math.floor(chips / CHIPS_PER_BOX);
-    var rem = chips % CHIPS_PER_BOX;
-    return boxes + '箱' + (rem ? rem + '枚' : '');
+    var n = Math.abs(Math.round(chips));
+    var cartons = Math.floor(n / CHIPS_PER_CARTON);
+    var boxes = Math.floor(n / CHIPS_PER_BOX) % BOXES_PER_CARTON;
+    var rem = n % CHIPS_PER_BOX;
+    var s = '';
+    if (cartons) s += cartons + 'カートン';
+    if (boxes) s += boxes + '箱';
+    if (rem || !s) s += rem + '枚';
+    return s;
   }
 
   /* 役一覧（h=翻数、ym=役満扱い。役満は13翻換算・複合役満は26翻などで表示切替） */
@@ -1515,16 +1545,20 @@
 
   function renderPlayers() {
     var t = totals();
+    var ct = chipTotals();
     /* 累計の多い順（1位→最下位）。色は登録順ベースなので並べ替え前に確定させる */
     var ranked = state.players.map(function (p, i) {
-      return { p: p, slot: playerSlot(p, i), v: t[p.id] || 0, reg: i };
+      return { p: p, slot: playerSlot(p, i), v: t[p.id] || 0, chips: ct[p.id] || 0, reg: i };
     }).sort(function (a, b) { return b.v - a.v || a.reg - b.reg; });
     $('players').innerHTML = ranked.map(function (x, rank) {
       var cls = x.v > 0 ? 'pos' : x.v < 0 ? 'neg' : 'zero';
       var n = state.entries.filter(function (e) { return e.playerId === x.p.id; }).length;
+      var box = x.chips ? '<span class="player-box ' + cls + '">' +
+        (x.chips > 0 ? '受取' : '支払') + ' ' + boxText(x.chips) + '</span>' : '';
       return '<button class="player-card" data-id="' + x.p.id + '" aria-label="' + esc(x.p.name) + ' に記録">' +
         '<span class="player-name"><span class="p-dot" style="background:var(--col' + x.slot + ')"></span><span class="pn">' + esc(x.p.name) + '</span></span>' +
         '<span class="player-pts ' + cls + '">' + fmt(x.v) + '</span>' +
+        box +
         '<span class="player-hint">' + (rank + 1) + '位・' + n + '回の記録</span>' +
         '</button>';
     }).join('');
@@ -1767,21 +1801,33 @@
     return (d.getMonth() + 1) + '/' + d.getDate();
   }
 
+  /* vals=pt（Y軸用）、chips=実チップ枚数（ツールチップの箱・カートン表示用） */
   function seriesBase() {
     return state.players.map(function (p, i) {
-      return { id: p.id, name: p.name, slot: playerSlot(p, i), vals: [] };
+      return { id: p.id, name: p.name, slot: playerSlot(p, i), vals: [], chips: [] };
     });
   }
 
   /* 期間開始時点までの累計（期間指定時のスタート値。全期間なら全員0） */
   function baseAt(cut) {
     var base = {};
-    state.players.forEach(function (p) { base[p.id] = 0; });
+    state.players.forEach(function (p) { base[p.id] = { pt: 0, chips: 0 }; });
     if (!cut) return base;
     state.entries.forEach(function (e) {
-      if (e.ts < cut && base[e.playerId] !== undefined) base[e.playerId] += e.delta;
+      if (e.ts < cut && base[e.playerId]) {
+        base[e.playerId].pt += e.delta;
+        base[e.playerId].chips += e.chips;
+      }
     });
     return base;
+  }
+
+  function pushStart(series, base) {
+    series.forEach(function (sr) {
+      var b = base[sr.id] || { pt: 0, chips: 0 };
+      sr.vals.push(b.pt);
+      sr.chips.push(b.chips);
+    });
   }
 
   /* 期間フィルタ時の起点ラベル（その時点のチップ枚数を表す） */
@@ -1796,13 +1842,14 @@
     if (!ents.length) return null;
     var base = baseAt(cut);
     var series = seriesBase();
-    series.forEach(function (sr) { sr.vals.push(base[sr.id] || 0); });
+    pushStart(series, base);
     var ticks = [];
     var prevTs = null;
     ents.forEach(function (e, k) {
       series.forEach(function (sr) {
-        var last = sr.vals[sr.vals.length - 1];
-        sr.vals.push(last + (e.playerId === sr.id ? e.delta : 0));
+        var mine = e.playerId === sr.id;
+        sr.vals.push(sr.vals[sr.vals.length - 1] + (mine ? e.delta : 0));
+        sr.chips.push(sr.chips[sr.chips.length - 1] + (mine ? e.chips : 0));
       });
       if (prevTs === null || e.ts - prevTs > SESSION_GAP) {
         ticks.push({ i: k + 1, label: mdLabel(e.ts) });
@@ -1822,12 +1869,16 @@
     var sess = groupSessions(ents);
     var base = baseAt(cut);
     var series = seriesBase();
-    series.forEach(function (sr) { sr.vals.push(base[sr.id] || 0); });
+    pushStart(series, base);
     sess.forEach(function (s) {
-      var d = {};
-      s.entries.forEach(function (e) { d[e.playerId] = (d[e.playerId] || 0) + e.delta; });
+      var d = {}, c = {};
+      s.entries.forEach(function (e) {
+        d[e.playerId] = (d[e.playerId] || 0) + e.delta;
+        c[e.playerId] = (c[e.playerId] || 0) + e.chips;
+      });
       series.forEach(function (sr) {
         sr.vals.push(sr.vals[sr.vals.length - 1] + (d[sr.id] || 0));
+        sr.chips.push(sr.chips[sr.chips.length - 1] + (c[sr.id] || 0));
       });
     });
     var labels = [startLabel(cut)].concat(sess.map(function (s) { return mdLabel(s.start); }));
@@ -2048,9 +2099,8 @@
         .map(function (sr) {
           var v = sr.vals[i];
           var boxNote = '';
-          if (!d.isRank) {
-            var chips = Math.round(Math.abs(v) / (state.rate || 1));
-            if (chips >= CHIPS_PER_BOX) boxNote = '<span class="tt-box">' + boxText(chips) + '</span>';
+          if (!d.isRank && sr.chips && sr.chips[i]) {
+            boxNote = '<span class="tt-box">' + boxText(sr.chips[i]) + '</span>';
           }
           return '<div class="tt-row"><span class="tt-l">' +
             '<span class="tt-dot" style="background:var(--col' + sr.slot + ')"></span>' +
