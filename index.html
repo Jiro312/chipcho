@@ -247,13 +247,16 @@
   .player-box.zero { color: var(--muted); }
   .player-flat {
     font-size: 11px;
-    color: var(--muted);
+    font-weight: 600;
     line-height: 1.3;
     font-variant-numeric: tabular-nums;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .player-flat.pos { color: var(--pos); }
+  .player-flat.neg { color: var(--neg); }
+  .player-flat.zero { color: var(--muted); }
   .player-hint { font-size: 11px; color: var(--muted); }
 
   .add-player {
@@ -1594,13 +1597,15 @@
       var n = state.entries.filter(function (e) { return e.playerId === x.p.id; }).length;
       var box = x.v ? '<span class="player-box ' + cls + '">' +
         (x.v > 0 ? '受取' : '支払') + ' ' + boxText(x.v) + '</span>' : '';
-      /* レートを変えていなかったら何ptだったか（全部×1換算） */
-      var flat = n ? '<span class="player-flat">×1なら ' + fmt(x.flat) + 'pt</span>' : '';
+      /* レートを変えていなかったら何ptだったか（全部×1換算）。
+         色は累計ptの符号ではなく、この値自体の符号で決める（両者は食い違うことがある） */
+      var fcls = x.flat > 0 ? 'pos' : x.flat < 0 ? 'neg' : 'zero';
+      var flat = n ? '<span class="player-flat ' + fcls + '">×1なら ' + fmt(x.flat) + 'pt</span>' : '';
       return '<button class="player-card" data-id="' + x.p.id + '" aria-label="' + esc(x.p.name) + ' に記録">' +
         '<span class="player-name"><span class="p-dot" style="background:var(--col' + x.slot + ')"></span><span class="pn">' + esc(x.p.name) + '</span></span>' +
         '<span class="player-pts ' + cls + '">' + fmt(x.v) + '</span>' +
-        box +
         flat +
+        box +
         '<span class="player-hint">' + (rank + 1) + '位・' + n + '回の記録</span>' +
         '</button>';
     }).join('');
