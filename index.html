@@ -245,6 +245,15 @@
   .player-box.pos { color: var(--pos); }
   .player-box.neg { color: var(--neg); }
   .player-box.zero { color: var(--muted); }
+  .player-flat {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .player-hint { font-size: 11px; color: var(--muted); }
 
   .add-player {
@@ -1385,6 +1394,37 @@
   function grandTotal() {
     return state.entries.reduce(function (a, e) { return a + e.delta; }, 0);
   }
+  /* LINE復元データの積み残し（2026-08-05調査）。
+     復元時にpt換算後の数字をそのまま chips に入れて rate=1 で保存したものを、
+     後から chips÷r・rate=r に付け替えたが、この8グループだけは「ズレを5人で均等割り」した
+     端数が混ざっていて3/5/7のどれでも割り切れず、×1のまま残さざるを得なかった。
+     結果 chips が pt のまま膨らんでいるので、枚数として集計するときだけ卓のレートで割る。
+     値はキー=記録の時刻(ms)、値=その卓の主レート。ptには一切影響しない（deltaは触らない）。 */
+  var FLAT_FIX = {
+    1781762640000: 3,  /* 2026-06-18 15:04 */
+    1781772060000: 3,  /* 2026-06-18 17:41 */
+    1782021960000: 5,  /* 2026-06-21 15:06 */
+    1782260160000: 5,  /* 2026-06-24 09:16 */
+    1782260460000: 5,  /* 2026-06-24 09:21 */
+    1782738180000: 5,  /* 2026-06-29 22:03 */
+    1782761520000: 5,  /* 2026-06-30 04:32 */
+    1783081200000: 5   /* 2026-07-03 21:20 */
+  };
+
+  /* レートを一度も変えず全部×1だった場合の累計（＝チップ枚数の合計） */
+  function flatTotals() {
+    var map = {};
+    state.players.forEach(function (p) { map[p.id] = 0; });
+    state.entries.forEach(function (e) {
+      if (map[e.playerId] === undefined) return;
+      var fix = FLAT_FIX[e.ts];
+      map[e.playerId] += fix ? e.chips / fix : e.chips;
+    });
+    /* 割り切れないので端数が出る。復元データは今後増えないため値は固定で、
+       丸めたあとも全員の合計が0になることを実データで確認済み */
+    state.players.forEach(function (p) { map[p.id] = Math.round(map[p.id]); });
+    return map;
+  }
 
   /* 3時間ルールでセッション（=1回の卓）に分割。古い順に返す */
   function groupSessions(entries) {
@@ -1544,19 +1584,23 @@
 
   function renderPlayers() {
     var t = totals();
+    var ft = flatTotals();
     /* 累計の多い順（1位→最下位）。色は登録順ベースなので並べ替え前に確定させる */
     var ranked = state.players.map(function (p, i) {
-      return { p: p, slot: playerSlot(p, i), v: t[p.id] || 0, reg: i };
+      return { p: p, slot: playerSlot(p, i), v: t[p.id] || 0, flat: ft[p.id] || 0, reg: i };
     }).sort(function (a, b) { return b.v - a.v || a.reg - b.reg; });
     $('players').innerHTML = ranked.map(function (x, rank) {
       var cls = x.v > 0 ? 'pos' : x.v < 0 ? 'neg' : 'zero';
       var n = state.entries.filter(function (e) { return e.playerId === x.p.id; }).length;
       var box = x.v ? '<span class="player-box ' + cls + '">' +
         (x.v > 0 ? '受取' : '支払') + ' ' + boxText(x.v) + '</span>' : '';
+      /* レートを変えていなかったら何ptだったか（全部×1換算） */
+      var flat = n ? '<span class="player-flat">×1なら ' + fmt(x.flat) + 'pt</span>' : '';
       return '<button class="player-card" data-id="' + x.p.id + '" aria-label="' + esc(x.p.name) + ' に記録">' +
         '<span class="player-name"><span class="p-dot" style="background:var(--col' + x.slot + ')"></span><span class="pn">' + esc(x.p.name) + '</span></span>' +
         '<span class="player-pts ' + cls + '">' + fmt(x.v) + '</span>' +
         box +
+        flat +
         '<span class="player-hint">' + (rank + 1) + '位・' + n + '回の記録</span>' +
         '</button>';
     }).join('');
