@@ -1,0 +1,30 @@
+# Supabase無料プランは約1週間アクセスが無いとプロジェクトを自動停止（Pause）する。
+# 週2回（月・木）データを1件だけ読んで「使われている」状態を維持する。
+name: Supabase keepalive
+
+on:
+  schedule:
+    # 毎週 月・木 の 03:00 UTC（= 12:00 JST）。間隔は最大4日なので1週間の停止条件に余裕で収まる
+    - cron: '0 3 * * 1,4'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST
+        env:
+          # index.html に公開されている publishable key と同じもの（クライアントで公開される前提の鍵）
+          SUPABASE_URL: https://yajyjkopjusamvalbunj.supabase.co
+          SUPABASE_ANON_KEY: sb_publishable_Nsy3HBM18ivGwQrSp2Ol9Q_AdWVVRuc
+        run: |
+          code=$(curl -sS -o /tmp/res.txt -w '%{http_code}' \
+            "$SUPABASE_URL/rest/v1/entries?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY")
+          echo "HTTP $code"
+          head -c 300 /tmp/res.txt; echo
+          # 2xx以外は失敗にする（＝GitHubから通知メールが飛ぶので停止に気づける）
+          case "$code" in
+            2*) echo "OK: Supabaseは起きています" ;;
+            *)  echo "NG: Supabaseが応答しません（521ならプロジェクトが停止している可能性）"; exit 1 ;;
+          esac
